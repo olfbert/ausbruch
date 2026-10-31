@@ -368,7 +368,7 @@ const CELL = 2;                     // Rastergröße in Metern (Laufwege)
 const HUMAN_SPEED = 1.4;            // m/s, normales Gehen
 const ZOMBIE_SPEED = HUMAN_SPEED*2; // doppelt so schnell
 const TIME_BASE = 10;               // Spielsekunden pro echter Sekunde bei ×1
-const SPEEDS = [1, 2, 4];
+const SPEEDS = [1, 2, 4, 10];
 const ZOMBIE_SENSE = 40;            // Zellen Laufweg (= 80 m): so weit wittern Zombies Beute
 const BITE_DIST = 1.6;              // m: Berührung
 const ZOMBIE_HP = 100;
@@ -403,6 +403,7 @@ const TOWER_R = 2.2;                // m Grundfläche (Radius)
 const WALL_THICK = 1.6;             // m Radius beim Mauer-Rastern
 const FIELD_INTERVAL = 0.3;         // s Spielzeit zwischen Wegfeld-Updates
 const MAX_SUBSTEP = 0.25;           // s Spielzeit pro Simulationsschritt
+const MAX_STEPS = 8, HARD_SUBSTEP = 0.35;   // mehr schafft ein Bild nicht: dann läuft das Spiel etwas langsamer statt zu ruckeln
 const TAU = Math.PI*2;
 const H = 0, Z = 1, S = 2;          // Agententypen
 const BUILD = new Set(['wall', 'soldier', 'flame', 'tesla']);
@@ -2440,21 +2441,40 @@ function scentStep(deadline){
 }
 
 // Richtung, in der die Witterung stärker wird (oder null)
-function scentHeading(a){
+function scentHeading(a, lat){
   const g = G, S = g.scent, E = g.sEdge, SW = g.SW;
   const ix = Math.floor((a.x + g.half)/CELL), iy = Math.floor((a.y + g.half)/CELL);
   if (ix < 0 || iy < 0 || ix >= g.W || iy >= g.W) return null;
   const nx = (ix/SG)|0, ny = (iy/SG)|0, i = ny*SW + nx, d = S[i];
   if (!d) return null;
+  a.sd = d;
   let vx = 0, vy = 0;
   if ((E[i] & 1) && S[i + 1] && S[i + 1] < d) vx++;
   if (nx > 0 && (E[i - 1] & 1) && S[i - 1] && S[i - 1] < d) vx--;
   if ((E[i] & 2) && S[i + SW] && S[i + SW] < d) vy++;
   if (ny > 0 && (E[i - SW] & 2) && S[i - SW] && S[i - SW] < d) vy--;
   if (!vx && !vy) return null;
-  // Ziel: Mitte des besseren Nachbarfelds
-  const tx = (nx + 0.5 + vx)*SG*CELL - g.half, ty = (ny + 0.5 + vy)*SG*CELL - g.half;
+  // Ziel: Mitte des besseren Nachbarfelds, je Zombie etwas seitlich versetzt
+  const L = Math.hypot(vx, vy), off = (lat || 0)*5;
+  const tx = (nx + 0.5 + vx)*SG*CELL - g.half - vy/L*off, ty = (ny + 0.5 + vy)*SG*CELL - g.half + vx/L*off;
   return Math.atan2(ty - a.y, tx - a.x);
+}
+
+// Jeder Zombie bekommt eigene Eigenheiten: Tempo, Schlingern, Platz in der Horde
+function zombify(a){
+  a.t = Z; a.hp = ZOMBIE_HP; a.burn = 0; a.stun = 0; a.ft = 0; a.lost = 0; a.zs = 0; a.run = false; a.best = 1e9;
+  a.side = rand() < 0.5 ? -1 : 1;
+  a.spd = 0.8 + rand()*0.4;            // 80–120 % Tempo
+  a.wph = rand()*TAU; a.wf = 0.4 + rand()*1.1;   // Schlingern: Phase und Takt
+  a.lat = rand()*2 - 1;                // seitlicher Versatz in der Horde
+  a.h = rand()*TAU; a.turn = 0; a.idle = 0;
+  if (a.cg == null) a.cg = (rand()*8)|0;
+  return a;
+}
+// geradeaus in Richtung h (an Wänden entlanggleiten)
+function stepDir(a, h, speed, dt){
+  a.h = h;
+  moveBy(a, Math.cos(h)*speed*dt, Math.sin(h)*speed*dt);
 }
 
 // Laufen in eine Richtung; ist der Weg verstellt, wird zur Seite ausgewichen (immer zur selben Seite)
@@ -2509,11 +2529,12 @@ function roam(a, dt){
       let vx = Math.cos(a.h)*0.6 + st.cx*1.4, vy = Math.sin(a.h)*0.6 + st.cy*1.4;
       const dx = st.x - a.x, dy = st.y - a.y, dd = Math.hypot(dx, dy);
       if (dd > 5){ const w = Math.min(1.5, dd/20); vx += dx/dd*w; vy += dy/dd*w; }
-      a.want = Math.atan2(vy, vx);
+      a.want = Math.atan2(vy, vx) + (rand() - 0.5)*0.9 + a.lat*0.35;   // jeder ein bisschen anders
     }
   }
-  if (a.want != null){ if (!goToward(a, a.want, ZOMBIE_ROAM, dt)) a.want = null; }
-  else wander(a, ZOMBIE_ROAM, dt, true);
+  const sp = ZOMBIE_ROAM*(a.spd || 1), wob = Math.sin(G.time*(a.wf || 1) + (a.wph || 0));
+  if (a.want != null){ if (!goToward(a, a.want + wob*0.5, sp, dt)) a.want = null; }
+  else wander(a, sp, dt, true);
 }
 
 // Zombies drängeln, stehen aber nicht aufeinander. Jeder Zombie prüft das nur in jedem
@@ -2603,37 +2624,43 @@ function updZombie(a, dt){
   if (a.stun > 0){ a.stun -= dt; return; }
   const i = cellIndex(a.x, a.y);
   const d = i >= 0 ? dv(G.distH, i) : FAR;
+  if (a.spd == null) zombify(a);
+  const sp = ZOMBIE_SPEED*a.spd, wob = Math.sin(G.time*a.wf + a.wph);
   a.run = true;
   // ganz nah: direkt auf den Menschen zu
   if (d <= 3){
     const p = nearestIn(G.ph, a.x, a.y, 9, null);
-    if (p){ steerTo(a, p.x, p.y, ZOMBIE_SPEED, dt); return; }
+    if (p){ steerTo(a, p.x, p.y, sp, dt); return; }
   }
+  // ab und zu stolpert einer kurz
+  if (a.idle > 0){ a.idle -= dt; return; }
+  if (rand() < dt*0.06) a.idle = 0.3 + rand()*0.9;
   zombieSpace(a, dt);
-  // bis 80 m: genauer Laufweg
+  // bis 80 m: genauer Laufweg, leicht schlingernd
   if (d < ZOMBIE_SENSE){
     const j = bestNeighbor(G.distH, i, false);
     if (j >= 0 && dv(G.distH, j) < d){
       const [tx, ty] = cellCenter(j);
-      steerTo(a, tx, ty, ZOMBIE_SPEED, dt);
+      stepDir(a, Math.atan2(ty - a.y, tx - a.x) + wob*0.3, sp, dt);
+      a.best = 1e9;
       return;
     }
   }
   // bis gut 1 km: der Witterung nach
   if (a.lost > 0) a.lost -= dt;
   else {
-    const h = scentHeading(a);
+    const h = scentHeading(a, a.lat);
     if (h !== null){
-      const ox = a.x, oy = a.y;
-      goToward(a, h, ZOMBIE_SPEED, dt);
-      // festgefahren (vor einer Mauer, in einer Sackgasse)? Dann eine Weile umherirren
-      const moved = Math.hypot(a.x - ox, a.y - oy);
-      a.zs = moved < ZOMBIE_SPEED*dt*0.3 ? (a.zs || 0) + dt : Math.max(0, (a.zs || 0) - dt);
-      if (a.zs > 2.5){ a.zs = 0; a.lost = 3 + rand()*4; a.h = rand()*TAU; a.side = -(a.side || 1); }
+      goToward(a, h + wob*0.45, sp, dt);
+      // kommt er der Witterung nicht näher (rutscht an einer Mauer entlang, Sackgasse)?
+      // Dann eine Weile umherirren und es anders versuchen
+      if (!(a.sd >= a.best)){ a.best = a.sd; a.zs = 0; }
+      else if ((a.zs = (a.zs || 0) + dt) > 4 + 16/sp){ a.zs = 0; a.best = 1e9; a.lost = 3 + rand()*5; a.h = rand()*TAU; a.side = -(a.side || 1); }
       return;
     }
   }
   a.run = false;
+  a.best = 1e9;
   roam(a, dt);
 }
 
@@ -2752,8 +2779,7 @@ function bites(){
       const dx = p.x - z.x, dy = p.y - z.y;
       if (dx*dx + dy*dy < b2){
         if (p.t === H) removeFromGroup(p);
-        p.t = Z; p.hp = ZOMBIE_HP; p.burn = 0; p.stun = 0; p.ft = 0; p.lost = 0; p.zs = 0; p.run = false; p.side = rand() < 0.5 ? -1 : 1;
-        p.h = rand()*TAU; p.turn = 0; p.idle = 0;
+        zombify(p);
         G.fx.push({ x:p.x, y:p.y, t:now });
       }
     });
@@ -2806,7 +2832,7 @@ function placeOutbreak(wx, wy){
       const nx = cx + (rand()-0.5)*5, ny = cy + (rand()-0.5)*5;
       if (free(nx, ny)){ x = nx; y = ny; break; }
     }
-    G.agents.push({ t:Z, x, y, h:rand()*TAU, turn:0, idle:0, alive:true, hp:ZOMBIE_HP, burn:0, stun:0, ft:0, lost:0, zs:0, run:false, side: rand() < 0.5 ? -1 : 1, cg:(rand()*8)|0 });
+    G.agents.push(zombify({ x, y, alive:true }));
   }
   G.fx.push({ x:cx, y:cy, t:now, big:true });
   G.started = true; G.ended = false;
@@ -3674,7 +3700,10 @@ function frame(now){
   last = now;
   stepCamAnim(now);
   if (G && running && $('#start').hidden){
-    const gdt = rdt * TIME_BASE * SPEEDS[speedIdx];
+    // Zeitschritt: bei ×10 viele Teilschritte; reicht die Rechenzeit nicht, wird die Spielzeit gedehnt
+    const want = rdt * TIME_BASE * SPEEDS[speedIdx];
+    const n = Math.max(1, Math.min(MAX_STEPS, Math.ceil(want / MAX_SUBSTEP)));
+    const sdt = Math.min(want / n, HARD_SUBSTEP), gdt = sdt * n;
     if (G.started){
       G.fieldT -= gdt;
       if (G.fieldT <= 0 && now >= G.fieldNext){
@@ -3695,8 +3724,7 @@ function frame(now){
     // ferne Menschen: jedes Bild ist eine andere Gruppe dran und holt die verstrichene Zeit nach
     const K = G.coldK, sel = G.frameNo++ % K;
     for (let k = 0; k < K; k++) G.coldAcc[k] += gdt;
-    const cdt = G.coldAcc[sel]; G.coldAcc[sel] = 0;
-    const n = Math.max(1, Math.ceil(gdt / MAX_SUBSTEP)), sdt = gdt / n;
+    const cdt = Math.min(G.coldAcc[sel], 4*COLD_STEP); G.coldAcc[sel] = 0;   // bei ×10 gehen ferne Menschen etwas gemächlicher
     for (let k=0; k<n; k++) step(sdt, k === 0 ? cdt : 0, sel);
     G.time += gdt;
     PERF.sim += performance.now() - t1;
