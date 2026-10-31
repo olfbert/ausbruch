@@ -196,7 +196,7 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
     <p class="lead">Wähle einen echten Ort oder lass eine Zufallskarte bauen, von der Kleinstadt bis zur Region mit 16 × 16 km. Menschen ziehen in Gruppen durch die Straßen, bis du den ersten Zombie aussetzt. Wer berührt wird, wird selbst einer.</p>
     <dl class="legend">
       <dt><span class="dot h"></span></dt><dd><b>Mensch</b> <span class="num">· 1,4 m/s, meist in Gruppen</span></dd>
-      <dt><span class="dot z"></span></dt><dd><b>Zombie</b> <span class="num">· 2,8 m/s</span></dd>
+      <dt><span class="dot z"></span></dt><dd><b>Zombie</b> <span class="num">· rennt mit 2,8 m/s, bildet Horden</span></dd>
       <dt><span class="dot s"></span></dt><dd><b>Soldat</b> <span class="num">· schießt bis 45 m</span></dd>
       <dt><span class="mk f"></span></dt><dd><b>Flammenturm</b> <span class="num">· 16 m, setzt in Brand</span></dd>
       <dt><span class="mk t"></span></dt><dd><b>Teslaturm</b> <span class="num">· 26 m, Blitz springt weiter</span></dd>
@@ -372,6 +372,13 @@ const SPEEDS = [1, 2, 4];
 const ZOMBIE_SENSE = 40;            // Zellen Laufweg (= 80 m): so weit wittern Zombies Beute
 const BITE_DIST = 1.6;              // m: Berührung
 const ZOMBIE_HP = 100;
+
+// Horden und Witterung
+const ZOMBIE_ROAM = 1.6;            // m/s: ohne Witterung schlurfen Zombies mit ihrer Horde umher
+const SG = 8;                       // Zellen je Witterungsfeld (16 m)
+const SCENT_RANGE = 75;             // Witterungsfelder (≈ 1,2 km): so weit riechen Zombies Menschen
+const SCENT_INTERVAL = 2;           // s Spielzeit zwischen zwei Witterungs-Durchläufen
+const HG = 16;                      // Zellen je Hordenfeld (32 m)
 
 // Rudelverhalten
 const GROUP_MAX = 12;               // größte Gruppe
@@ -1938,6 +1945,9 @@ async function newGame(m, humans, say){
   await say('Suche zusammenhängende Wege …');
   const mainCount = markMain(W, cell);
   if (mainCount < 200) throw new Error('Hier gibt es kaum begehbare Wege. Wähle einen anderen Ort.');
+  await say('Lege Witterung an …');
+  const SW = Math.ceil(W/SG), HW = Math.ceil(W/HG);
+  const sEdge = scentEdges(W, cell, SW);
   await say('Zeichne Karte …');
   const ov = makeOverview(idx, size, batch);
   const N = W*W, CW = Math.ceil(W/CS), NC = CW*CW;
@@ -1953,10 +1963,12 @@ async function newGame(m, humans, say){
     CW, NC, zc: new Uint8Array(NC), hc: new Uint8Array(NC), zN: new Uint8Array(NC), hN: new Uint8Array(NC),
     tA: new Uint8Array(NC), tB: new Uint8Array(NC), rH: new Uint8Array(NC), rZ: new Uint8Array(NC), tch: new Uint8Array(NC),
     listH: [], listZ: [], fieldFlip: false, fieldSlow: false,
-    coldK: 1, coldAcc: new Float64Array(8), frameNo: 0, fieldNext: 0,
+    coldK: 1, coldAcc: new Float64Array(8), frameNo: 0, fieldNext: 0, sepTick: 0,
     agents: [], walls: [], towers: [], corpses: [], fx: [], tracers: [], bolts: [], parts: [],
     time: 0, fieldT: 0, started: false, ended: false, kills: 0, maxZ: 0, humans0: 0, _lastKills: -1,
-    ph: newHash(), zh: newHash()
+    ph: newHash(), zh: newHash(),
+    SW, sEdge, scent: new Uint16Array(SW*SW), scentNext: new Uint16Array(SW*SW), sq: new Int32Array(1 << 14), sbfs: null, scentT: 0,
+    HW, hz: new Uint16Array(HW*HW), hsx: new Float32Array(HW*HW), hsy: new Float32Array(HW*HW), hcx: new Float32Array(HW*HW), hcy: new Float32Array(HW*HW), hList: [], hordeT: 0
   };
   G.zoneW = G.zones ? G.zones.reduce((s, z) => s + z.w, 0) : 0;
   await say('Verteile Menschen …');
@@ -1989,6 +2001,9 @@ function resetGame(){
   for (const w of walls) for (const i of w.cells) refreshBlock(i);
   for (const t of towers) for (const i of t.cells) refreshBlock(i);
   clearFields();
+  G.scent.fill(0); G.scentNext.fill(0); G.sbfs = null; G.scentT = 0; G.hordeT = 0;
+  for (const n of G.hList){ G.hz[n] = 0; G.hsx[n] = G.hsy[n] = G.hcx[n] = G.hcy[n] = 0; }
+  G.hList = [];
   G.time = 0; G.fieldT = 0; G.started = false; G.ended = false; G.kills = 0; G.maxZ = 0; G._lastKills = -1;
   spawnHumans(lastMap.humans);
   setTool('outbreak');
@@ -2360,6 +2375,173 @@ function bestNeighbor(dist, i, wantMax){
 }
 
 /* =====================================================================
+   8b) WITTERUNG UND HORDEN
+   Witterung: grobes Feld (16 m) mit dem Weg zum nächsten Menschen, bis
+   etwa 1,2 km weit. Zombies, die keinen Menschen in der Nähe haben, rennen
+   ihr nach. Durchgänge zwischen den Feldern zählen nur, wo man wirklich
+   laufen kann (Brücken ja, Flüsse und Häuserreihen nein). Gebaute Mauern
+   kennt die Witterung nicht: Zombies drängen sich dann davor.
+   Horden: Zombies ohne Witterung ziehen zu den Zombies ringsum und laufen
+   in deren Richtung. So entstehen Horden, die den Jägern unter ihnen folgen.
+   ===================================================================== */
+function scentEdges(W, cell, SW){
+  const E = new Uint8Array(SW*SW);
+  for (let ny = 0; ny < SW; ny++) for (let nx = 0; nx < SW; nx++){
+    const x0 = nx*SG, y0 = ny*SG, x1 = Math.min(W, x0 + SG), y1 = Math.min(W, y0 + SG);
+    let e = 0;
+    if (x1 < W && nx < SW - 1) for (let y = y0; y < y1; y++){ const i = y*W + x1 - 1; if (!((cell[i] | cell[i + 1]) & C_SOLID)){ e |= 1; break; } }
+    if (y1 < W && ny < SW - 1) for (let x = x0; x < x1; x++){ const i = (y1 - 1)*W + x; if (!((cell[i] | cell[i + W]) & C_SOLID)){ e |= 2; break; } }
+    E[ny*SW + nx] = e;
+  }
+  return E;
+}
+
+// Neuberechnung in Etappen über mehrere Bilder; erst wenn sie fertig ist, gilt das neue Feld
+function scentStart(){
+  const g = G, S = g.scentNext, SW = g.SW;
+  S.fill(0);
+  let q = g.sq, mask = q.length - 1, qt = 0;
+  for (const a of g.agents){
+    if (!a.alive || a.t === Z) continue;
+    const ix = Math.floor((a.x + g.half)/CELL), iy = Math.floor((a.y + g.half)/CELL);
+    if (ix < 0 || iy < 0 || ix >= g.W || iy >= g.W) continue;
+    const n = ((iy/SG)|0)*SW + ((ix/SG)|0);
+    if (S[n]) continue;
+    S[n] = 1;
+    if (qt > mask){ q = growQ(q, 0, qt); mask = q.length - 1; }
+    q[qt & mask] = n; qt++;
+  }
+  g.sq = q;
+  g.sbfs = { qh:0, qt };
+}
+function scentStep(deadline){
+  const g = G, st = g.sbfs, S = g.scentNext, E = g.sEdge, SW = g.SW;
+  let q = g.sq, mask = q.length - 1, qh = st.qh, qt = st.qt;
+  const push = (j, v) => {
+    S[j] = v;
+    if (qt - qh > mask){ q = growQ(q, qh, qt); mask = q.length - 1; }
+    q[qt & mask] = j; qt++;
+  };
+  while (qh < qt){
+    for (let k = 0; k < 4096 && qh < qt; k++){
+      const i = q[qh & mask]; qh++;
+      const d = S[i];
+      if (d > SCENT_RANGE) continue;
+      const v = d + 1, x = i % SW;
+      if ((E[i] & 1) && !S[i + 1]) push(i + 1, v);
+      if (x > 0 && (E[i - 1] & 1) && !S[i - 1]) push(i - 1, v);
+      if ((E[i] & 2) && !S[i + SW]) push(i + SW, v);
+      if (i >= SW && (E[i - SW] & 2) && !S[i - SW]) push(i - SW, v);
+    }
+    if (performance.now() > deadline) break;
+  }
+  g.sq = q; st.qh = qh; st.qt = qt;
+  if (qh >= qt){ g.scentNext = g.scent; g.scent = S; g.sbfs = null; g.scentT = SCENT_INTERVAL; }
+}
+
+// Richtung, in der die Witterung stärker wird (oder null)
+function scentHeading(a){
+  const g = G, S = g.scent, E = g.sEdge, SW = g.SW;
+  const ix = Math.floor((a.x + g.half)/CELL), iy = Math.floor((a.y + g.half)/CELL);
+  if (ix < 0 || iy < 0 || ix >= g.W || iy >= g.W) return null;
+  const nx = (ix/SG)|0, ny = (iy/SG)|0, i = ny*SW + nx, d = S[i];
+  if (!d) return null;
+  let vx = 0, vy = 0;
+  if ((E[i] & 1) && S[i + 1] && S[i + 1] < d) vx++;
+  if (nx > 0 && (E[i - 1] & 1) && S[i - 1] && S[i - 1] < d) vx--;
+  if ((E[i] & 2) && S[i + SW] && S[i + SW] < d) vy++;
+  if (ny > 0 && (E[i - SW] & 2) && S[i - SW] && S[i - SW] < d) vy--;
+  if (!vx && !vy) return null;
+  // Ziel: Mitte des besseren Nachbarfelds
+  const tx = (nx + 0.5 + vx)*SG*CELL - g.half, ty = (ny + 0.5 + vy)*SG*CELL - g.half;
+  return Math.atan2(ty - a.y, tx - a.x);
+}
+
+// Laufen in eine Richtung; ist der Weg verstellt, wird zur Seite ausgewichen (immer zur selben Seite)
+const DETOUR = [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.1, -2.1, 2.7, -2.7];
+function goToward(a, h, speed, dt){
+  const sd = a.side || 1, look = Math.max(2.2, speed*dt + 1);
+  for (let k = 0; k < DETOUR.length; k++){
+    const hh = h + DETOUR[k]*sd, cx = Math.cos(hh), cy = Math.sin(hh);
+    if (!free(a.x + cx*look, a.y + cy*look)) continue;
+    a.h = hh;
+    return moveBy(a, cx*speed*dt, cy*speed*dt);
+  }
+  a.side = -sd;
+  return false;
+}
+
+// Hordenfelder (32 m): Anzahl, Mittelpunkt und Laufrichtung der Zombies
+function updateHordes(){
+  const g = G, HW = g.HW, half = g.half, s = CELL*HG;
+  for (const n of g.hList){ g.hz[n] = 0; g.hsx[n] = g.hsy[n] = g.hcx[n] = g.hcy[n] = 0; }
+  g.hList.length = 0;
+  for (const a of g.agents){
+    if (!a.alive || a.t !== Z) continue;
+    const nx = Math.floor((a.x + half)/s), ny = Math.floor((a.y + half)/s);
+    if (nx < 0 || ny < 0 || nx >= HW || ny >= HW) continue;
+    const n = ny*HW + nx;
+    if (!g.hz[n]) g.hList.push(n);
+    g.hz[n]++; g.hsx[n] += a.x; g.hsy[n] += a.y; g.hcx[n] += Math.cos(a.h); g.hcy[n] += Math.sin(a.h);
+  }
+}
+const HS = { n:0, x:0, y:0, cx:0, cy:0 };
+function hordeAt(x, y){
+  const g = G, HW = g.HW, s = CELL*HG, nx = Math.floor((x + g.half)/s), ny = Math.floor((y + g.half)/s);
+  let n = 0, sx = 0, sy = 0, cx = 0, cy = 0;
+  for (let yy = Math.max(0, ny - 1); yy <= Math.min(HW - 1, ny + 1); yy++) for (let xx = Math.max(0, nx - 1); xx <= Math.min(HW - 1, nx + 1); xx++){
+    const k = yy*HW + xx, c = g.hz[k];
+    if (!c) continue;
+    n += c; sx += g.hsx[k]; sy += g.hsy[k]; cx += g.hcx[k]; cy += g.hcy[k];
+  }
+  HS.n = n; HS.x = n ? sx/n : x; HS.y = n ? sy/n : y; HS.cx = n ? cx/n : 0; HS.cy = n ? cy/n : 0;
+  return HS;
+}
+
+// Ohne Witterung: mit der Horde ziehen (zur Mitte, in ihre Richtung), sonst allein umherirren
+function roam(a, dt){
+  a.ft -= dt;
+  if (!(a.ft > 0)){
+    a.ft = 0.5 + rand()*0.7;
+    const st = hordeAt(a.x, a.y);
+    a.want = null;
+    if (st.n > 1){
+      let vx = Math.cos(a.h)*0.6 + st.cx*1.4, vy = Math.sin(a.h)*0.6 + st.cy*1.4;
+      const dx = st.x - a.x, dy = st.y - a.y, dd = Math.hypot(dx, dy);
+      if (dd > 5){ const w = Math.min(1.5, dd/20); vx += dx/dd*w; vy += dy/dd*w; }
+      a.want = Math.atan2(vy, vx);
+    }
+  }
+  if (a.want != null){ if (!goToward(a, a.want, ZOMBIE_ROAM, dt)) a.want = null; }
+  else wander(a, ZOMBIE_ROAM, dt, true);
+}
+
+// Zombies drängeln, stehen aber nicht aufeinander. Jeder Zombie prüft das nur in jedem
+// zweiten Teilschritt und schaut höchstens 6 Nachbarn an (in großen Horden sonst zu teuer).
+function zombieSpace(a, dt){
+  const g = G, hh = g.zh, half = g.half, agents = g.agents, R = 1.1;
+  if (((a.cg | 0) & 1) !== g.sepTick) return;
+  const x0 = Math.floor((a.x - R + half)/HCELL), x1 = Math.floor((a.x + R + half)/HCELL);
+  const y0 = Math.floor((a.y - R + half)/HCELL), y1 = Math.floor((a.y + R + half)/HCELL);
+  let sx = 0, sy = 0, n = 0;
+  scan: for (let yy = y0; yy <= y1; yy++){
+    const row = (yy & HMASK) << 8;
+    for (let xx = x0; xx <= x1; xx++){
+      for (let k = hh.head[row | (xx & HMASK)]; k !== -1; k = hh.next[k]){
+        const q = agents[k];
+        if (q === a) continue;
+        const ex = a.x - q.x, ey = a.y - q.y, d2 = ex*ex + ey*ey;
+        if (d2 >= R*R || d2 < 1e-6) continue;
+        const dd = Math.sqrt(d2);
+        sx += ex/dd*(R - dd); sy += ey/dd*(R - dd);
+        if (++n >= 6) break scan;
+      }
+    }
+  }
+  if (n) moveBy(a, sx*dt*4, sy*dt*4);
+}
+
+/* =====================================================================
    9) BEWEGUNG & KAMPF
    ===================================================================== */
 function moveBy(a, dx, dy){
@@ -2421,10 +2603,14 @@ function updZombie(a, dt){
   if (a.stun > 0){ a.stun -= dt; return; }
   const i = cellIndex(a.x, a.y);
   const d = i >= 0 ? dv(G.distH, i) : FAR;
+  a.run = true;
+  // ganz nah: direkt auf den Menschen zu
   if (d <= 3){
     const p = nearestIn(G.ph, a.x, a.y, 9, null);
     if (p){ steerTo(a, p.x, p.y, ZOMBIE_SPEED, dt); return; }
   }
+  zombieSpace(a, dt);
+  // bis 80 m: genauer Laufweg
   if (d < ZOMBIE_SENSE){
     const j = bestNeighbor(G.distH, i, false);
     if (j >= 0 && dv(G.distH, j) < d){
@@ -2433,7 +2619,22 @@ function updZombie(a, dt){
       return;
     }
   }
-  wander(a, ZOMBIE_SPEED, dt, false);
+  // bis gut 1 km: der Witterung nach
+  if (a.lost > 0) a.lost -= dt;
+  else {
+    const h = scentHeading(a);
+    if (h !== null){
+      const ox = a.x, oy = a.y;
+      goToward(a, h, ZOMBIE_SPEED, dt);
+      // festgefahren (vor einer Mauer, in einer Sackgasse)? Dann eine Weile umherirren
+      const moved = Math.hypot(a.x - ox, a.y - oy);
+      a.zs = moved < ZOMBIE_SPEED*dt*0.3 ? (a.zs || 0) + dt : Math.max(0, (a.zs || 0) - dt);
+      if (a.zs > 2.5){ a.zs = 0; a.lost = 3 + rand()*4; a.h = rand()*TAU; a.side = -(a.side || 1); }
+      return;
+    }
+  }
+  a.run = false;
+  roam(a, dt);
 }
 
 // Sichtlinie: Gebäude blockieren immer, Mauern nur für Soldaten am Boden
@@ -2551,7 +2752,7 @@ function bites(){
       const dx = p.x - z.x, dy = p.y - z.y;
       if (dx*dx + dy*dy < b2){
         if (p.t === H) removeFromGroup(p);
-        p.t = Z; p.hp = ZOMBIE_HP; p.burn = 0; p.stun = 0;
+        p.t = Z; p.hp = ZOMBIE_HP; p.burn = 0; p.stun = 0; p.ft = 0; p.lost = 0; p.zs = 0; p.run = false; p.side = rand() < 0.5 ? -1 : 1;
         p.h = rand()*TAU; p.turn = 0; p.idle = 0;
         G.fx.push({ x:p.x, y:p.y, t:now });
       }
@@ -2565,6 +2766,7 @@ function step(dt, coldDt, coldSel){
   const g = G;
   buildHash(g.ph, a => a.t !== Z);
   buildHash(g.zh, a => a.t === Z);
+  g.sepTick = g.sepTick ? 0 : 1;
   const hot = g.started ? g.zN : null, CW = g.CW, cs = CELL*CS, half = g.half, K = g.coldK;
   // beim Hineinzoomen laufen alle sichtbaren Menschen flüssig
   const vs = cam.s >= 0.8, vx0 = -cam.x/cam.s - 10, vy0 = -cam.y/cam.s - 10, vx1 = (VW - cam.x)/cam.s + 10, vy1 = (VH - cam.y)/cam.s + 10;
@@ -2604,7 +2806,7 @@ function placeOutbreak(wx, wy){
       const nx = cx + (rand()-0.5)*5, ny = cy + (rand()-0.5)*5;
       if (free(nx, ny)){ x = nx; y = ny; break; }
     }
-    G.agents.push({ t:Z, x, y, h:rand()*TAU, turn:0, idle:0, alive:true, hp:ZOMBIE_HP, burn:0, stun:0 });
+    G.agents.push({ t:Z, x, y, h:rand()*TAU, turn:0, idle:0, alive:true, hp:ZOMBIE_HP, burn:0, stun:0, ft:0, lost:0, zs:0, run:false, side: rand() < 0.5 ? -1 : 1, cg:(rand()*8)|0 });
   }
   G.fx.push({ x:cx, y:cy, t:now, big:true });
   G.started = true; G.ended = false;
@@ -2884,11 +3086,32 @@ function render(now, rdt){
     }
   }
 
+  // Horden aus der Ferne: grüner Fleck, der mit der Zahl der Zombies wächst
+  if (s < 0.6 && G.hList.length){
+    const a0 = Math.min(1, (0.6 - s)/0.3);
+    ctx.fillStyle = `rgba(92,255,122,${(0.3*a0).toFixed(3)})`; ctx.beginPath();
+    for (const n of G.hList){
+      const c = G.hz[n];
+      if (c < 4) continue;
+      const x = G.hsx[n]/c, y = G.hsy[n]/c;
+      if (x < vx0 || x > vx1 || y < vy0 || y > vy1) continue;
+      const rr = (1 + Math.sqrt(c)*0.75)/s;         // in Pixeln: 10 Zombies ≈ 3 px, 100 ≈ 8 px
+      ctx.moveTo(x + rr, y); ctx.arc(x, y, rr, 0, TAU);
+    }
+    ctx.fill();
+  }
   // Zombie-Schein, Brand
   ctx.fillStyle = COL.zombieGlow; dots(zs, r*2.6, 5000); ctx.fill();
   const burning = zs.filter(z => z.burn > 0);
   if (burning.length){
     ctx.fillStyle = `rgba(255,${100 + (rand()*60|0)},40,0.6)`; circles(burning, Math.max(r*1.9, 4.5/s)*(0.85 + rand()*0.3)); ctx.fill();
+  }
+  // rennende Zombies: kurzer Schweif (nur nah genug dran)
+  if (s > 0.6 && zs.length < 4000){
+    const L = Math.max(2.4, 6/s);
+    ctx.strokeStyle = 'rgba(92,255,122,0.3)'; ctx.lineWidth = r*1.1; ctx.beginPath();
+    for (const z of zs){ if (!z.run || z.stun > 0) continue; ctx.moveTo(z.x, z.y); ctx.lineTo(z.x - Math.cos(z.h)*L, z.y - Math.sin(z.h)*L); }
+    ctx.stroke();
   }
   // Menschen, Zombies
   ctx.fillStyle = COL.human; dots(hs, r); ctx.fill();
@@ -3243,6 +3466,12 @@ function showModal(title, cls, text, stats, buttons){
 
 const fmtNum = n => n.toLocaleString('de-DE');
 const fmtSize = m => m >= 1000 ? `${String(m/1000).replace('.', ',')} × ${String(m/1000).replace('.', ',')} km` : `${m} × ${m} m`;
+// größte Horde: meiste Zombies in einem 3 × 3-Block aus Hordenfeldern (≈ 100 m)
+function biggestHorde(){
+  let best = 0;
+  for (const n of G.hList){ const h = hordeAt(G.hsx[n]/G.hz[n], G.hsy[n]/G.hz[n]); if (h.n > best) best = h.n; }
+  return best;
+}
 function openMenu(){
   running = false; syncPlay();
   const c = counts();
@@ -3252,6 +3481,7 @@ function openMenu(){
     ['Menschen', `${c.h} von ${G.humans0}`],
     ['Gruppen', String(c.groups)],
     ['Zombies', String(c.z)],
+    ['Größte Horde', c.z ? `${biggestHorde()} Zombies` : '–'],
     ['Erledigt', String(G.kills)],
     ['Türme', `${fl} Flamme · ${te} Tesla`],
     ['Mauern', `${Math.round(G.walls.reduce((s, w) => s + w.len, 0))} m`]
@@ -3437,7 +3667,7 @@ seedIn.addEventListener('keydown', e => { if (e.key === 'Enter') buildRandom(); 
    14) HAUPTSCHLEIFE
    ===================================================================== */
 let last = performance.now();
-const PERF = { sim:0, fields:0, render:0, frames:0 };   // Messwerte (ms, aufsummiert) für die Konsole
+const PERF = { sim:0, fields:0, scent:0, render:0, frames:0 };   // Messwerte (ms, aufsummiert) für die Konsole
 function frame(now){
   requestAnimationFrame(frame);           // zuerst: ein Fehler unten hält das Spiel nicht an
   const rdt = Math.max(0, Math.min(0.05, (now - last)/1000));
@@ -3454,6 +3684,12 @@ function frame(now){
         G.fieldT = FIELD_INTERVAL; G.fieldNext = now + c*3;   // teure Felder seltener: höchstens etwa ein Drittel der Rechenzeit
         PERF.fields += c;
       }
+      // Witterung: Neuberechnung über mehrere Bilder verteilt (höchstens ~3 ms pro Bild)
+      G.scentT -= gdt;
+      if (!G.sbfs && G.scentT <= 0) scentStart();
+      if (G.sbfs){ const t0 = performance.now(); scentStep(t0 + 3); PERF.scent += performance.now() - t0; }
+      G.hordeT -= gdt;
+      if (G.hordeT <= 0){ updateHordes(); G.hordeT = 0.5; }
     }
     const t1 = performance.now();
     // ferne Menschen: jedes Bild ist eine andere Gruppe dran und holt die verstrichene Zeit nach
@@ -3473,7 +3709,7 @@ function frame(now){
 requestAnimationFrame(frame);
 
 // Test-Zugang für die Konsole
-window.__ausbruch = { get G(){ return G; }, cam, randomCity, randomRegion, decodeTile, addTile, emptyFeatures, placeOutbreak, placeSoldier, placeTower, addWall, setTool, step, updateFields, counts, tiles, zoomAt, render, PERF, launch };
+window.__ausbruch = { get G(){ return G; }, cam, randomCity, randomRegion, decodeTile, addTile, emptyFeatures, placeOutbreak, placeSoldier, placeTower, addWall, setTool, step, updateFields, counts, tiles, zoomAt, render, PERF, launch, scentStart, scentStep, updateHordes };
 </script>
 </body>
 </html>
