@@ -86,6 +86,10 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
 .btn.primary:disabled{opacity:.55}
 .btn.small{height:46px;font-size:15px;padding:0 12px;white-space:nowrap}
 .btn.ghost{background:transparent}
+.btn.icon{width:46px;padding:0;display:grid;place-items:center;flex:none}
+.btn.icon svg{width:22px;height:22px}
+.divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--panel-line)}
 #status{margin:0;min-height:1.4em;font-family:var(--f-num);font-size:13px;color:var(--muted);line-height:1.45}
 #status.err{color:var(--alert)}
 .fine{margin:0;font-size:13px;color:var(--muted);line-height:1.4}
@@ -177,9 +181,9 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
 <!-- Startbildschirm -->
 <section id="start">
   <div class="start-inner">
-    <div class="eyebrow">Simulation auf OpenStreetMap</div>
+    <div class="eyebrow">Zombie-Simulation</div>
     <h1>AUS<span>BRUCH</span></h1>
-    <p class="lead">Wähle einen echten Ort. Menschen ziehen in Gruppen durch die Straßen, bis du den ersten Zombie aussetzt. Wer berührt wird, wird selbst einer.</p>
+    <p class="lead">Wähle einen echten Ort oder lass eine Zufallsstadt bauen. Menschen ziehen in Gruppen durch die Straßen, bis du den ersten Zombie aussetzt. Wer berührt wird, wird selbst einer.</p>
     <dl class="legend">
       <dt><span class="dot h"></span></dt><dd><b>Mensch</b> <span class="num">· 1,4 m/s, meist in Gruppen</span></dd>
       <dt><span class="dot z"></span></dt><dd><b>Zombie</b> <span class="num">· 2,8 m/s</span></dd>
@@ -188,13 +192,6 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
       <dt><span class="mk t"></span></dt><dd><b>Teslaturm</b> <span class="num">· 26 m, Blitz springt weiter</span></dd>
     </dl>
     <div class="form">
-      <div class="field">
-        <label for="q">Ort, Adresse oder Koordinaten</label>
-        <div class="row">
-          <input id="q" type="text" value="Obertshausen" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
-          <button id="geoBtn" class="btn small" type="button">Mein Standort</button>
-        </div>
-      </div>
       <div class="grid2">
         <div class="field">
           <label for="area">Gebiet</label>
@@ -209,11 +206,28 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
           <input id="pop" type="range" min="100" max="2000" step="50" value="500">
         </div>
       </div>
-      <button id="loadBtn" class="btn primary" type="button">Karte laden</button>
-      <button id="demoBtn" class="btn ghost" type="button">Demo-Stadt ohne Internet</button>
+      <div class="field">
+        <label for="q">Ort, Adresse oder Koordinaten</label>
+        <div class="row">
+          <input id="q" type="text" value="Obertshausen" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
+          <button id="geoBtn" class="btn small" type="button">Mein Standort</button>
+        </div>
+      </div>
+      <button id="loadBtn" class="btn primary" type="button">Echten Ort laden</button>
+      <div class="divider">oder ohne Internet</div>
+      <div class="field">
+        <label for="seed">Zufallsstadt · Seed (Zahl oder Wort)</label>
+        <div class="row">
+          <input id="seed" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+          <button id="diceBtn" class="btn icon" type="button" aria-label="Neuen Seed würfeln">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><g fill="currentColor" stroke="none"><circle cx="8.3" cy="8.3" r="1.4"/><circle cx="15.7" cy="8.3" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="8.3" cy="15.7" r="1.4"/><circle cx="15.7" cy="15.7" r="1.4"/></g></svg>
+          </button>
+        </div>
+      </div>
+      <button id="randBtn" class="btn" type="button">Zufallsstadt bauen</button>
       <p id="status" role="status" aria-live="polite"></p>
     </div>
-    <p class="fine">Kartendaten © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap-Mitwirkende</a> (ODbL), geladen über Nominatim und die Overpass-API. Geladene Karten werden auf diesem Gerät zwischengespeichert.</p>
+    <p class="fine">Echte Orte: Kartendaten © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap-Mitwirkende</a> (ODbL), als Kacheln von <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>, Ortssuche über Nominatim. Geladene Karten werden auf diesem Gerät zwischengespeichert. Zufallsstädte entstehen ohne Internet allein aus dem Seed: gleicher Seed, gleiche Stadt.</p>
   </div>
 </section>
 
@@ -498,6 +512,195 @@ async function fetchArea(lat, lon, size, onStatus){
   return { elements: [...seen.values()] };
 }
 
+/* ---------- Kartenkacheln: OpenFreeMap (Vektorkacheln im OpenMapTiles-Schema) ----------
+   Die Kacheln liegen fertig berechnet in einem Server-Cache. Das ist viel schneller und
+   zuverlässiger als eine Live-Abfrage bei Overpass. Zoomstufe 14 enthält alle Häuser und Wege. */
+const TILEJSON = 'https://tiles.openfreemap.org/planet';
+const TILE_Z = 14;
+let tileTpl = null;
+const utf8 = new TextDecoder();
+
+// Minimaler Protobuf-Leser für Mapbox-Vektorkacheln
+class PBF {
+  constructor(buf){ this.b = buf; this.p = 0; this.len = buf.length; }
+  varint(){ let v = 0, m = 1, c; do { c = this.b[this.p++]; v += (c & 0x7f)*m; m *= 128; } while (c & 0x80); return v; }
+  skip(wt){
+    if (wt === 0) this.varint();
+    else if (wt === 1) this.p += 8;
+    else if (wt === 2){ const l = this.varint(); this.p += l; }
+    else if (wt === 5) this.p += 4;
+    else throw new Error('Kachel beschädigt');
+  }
+  str(){ const l = this.varint(), v = utf8.decode(this.b.subarray(this.p, this.p + l)); this.p += l; return v; }
+  packed(){ const l = this.varint(), end = this.p + l, out = []; while (this.p < end) out.push(this.varint()); return out; }
+}
+function decodeTile(buf){
+  const pb = new PBF(buf), layers = {};
+  while (pb.p < pb.len){
+    const tag = pb.varint(), fld = tag >> 3, wt = tag & 7;
+    if (fld === 3 && wt === 2){ const l = pb.varint(), end = pb.p + l; const L = decodeLayer(pb, end); layers[L.name] = L; pb.p = end; }
+    else pb.skip(wt);
+  }
+  return layers;
+}
+function decodeLayer(pb, end){
+  const L = { name:'', extent:4096, keys:[], values:[], feats:[] };
+  while (pb.p < end){
+    const tag = pb.varint(), fld = tag >> 3, wt = tag & 7;
+    if (fld === 1) L.name = pb.str();
+    else if (fld === 2){ const l = pb.varint(), fe = pb.p + l; L.feats.push(decodeFeature(pb, fe)); pb.p = fe; }
+    else if (fld === 3) L.keys.push(pb.str());
+    else if (fld === 4){ const l = pb.varint(), ve = pb.p + l; L.values.push(decodeValue(pb, ve)); pb.p = ve; }
+    else if (fld === 5) L.extent = pb.varint();
+    else pb.skip(wt);
+  }
+  return L;
+}
+function decodeFeature(pb, end){
+  const F = { tags:[], type:0, geom:[] };
+  while (pb.p < end){
+    const tag = pb.varint(), fld = tag >> 3, wt = tag & 7;
+    if (fld === 2 && wt === 2) F.tags = pb.packed();
+    else if (fld === 3) F.type = pb.varint();
+    else if (fld === 4 && wt === 2) F.geom = pb.packed();
+    else pb.skip(wt);
+  }
+  return F;
+}
+function decodeValue(pb, end){
+  let v = null;
+  while (pb.p < end){
+    const tag = pb.varint(), fld = tag >> 3, wt = tag & 7;
+    if (fld === 1) v = pb.str();
+    else if (fld === 2){ v = new DataView(pb.b.buffer, pb.b.byteOffset + pb.p, 4).getFloat32(0, true); pb.p += 4; }
+    else if (fld === 3){ v = new DataView(pb.b.buffer, pb.b.byteOffset + pb.p, 8).getFloat64(0, true); pb.p += 8; }
+    else if (fld === 4 || fld === 5) v = pb.varint();
+    else if (fld === 6){ const n = pb.varint(); v = n % 2 ? -(n + 1)/2 : n/2; }
+    else if (fld === 7) v = !!pb.varint();
+    else pb.skip(wt);
+  }
+  return v;
+}
+// Geometrie-Befehle (MoveTo, LineTo, ClosePath) in Punktlisten umwandeln
+function featGeom(geom){
+  const parts = []; let cur = null, x = 0, y = 0, i = 0;
+  while (i < geom.length){
+    const c = geom[i++], id = c & 7, n = c >> 3;
+    if (id === 1 || id === 2){
+      for (let k=0; k<n && i+1 < geom.length; k++){
+        const dx = geom[i++], dy = geom[i++];
+        x += (dx % 2) ? -(dx + 1)/2 : dx/2;
+        y += (dy % 2) ? -(dy + 1)/2 : dy/2;
+        if (id === 1){ cur = [[x, y]]; parts.push(cur); } else if (cur) cur.push([x, y]);
+      }
+    } else if (id === 7 && cur) cur.push(cur[0]);
+  }
+  return parts;
+}
+
+async function fetchTileBuf(url){
+  let last = null;
+  for (let k=0; k<3; k++){
+    try {
+      const r = await fetch(url);
+      if (r.status === 204 || r.status === 404) return null;        // leere Kachel
+      if (!r.ok) throw new Error(`Kachelserver antwortet mit Fehler ${r.status}.`);
+      let buf = new Uint8Array(await r.arrayBuffer());
+      if (buf[0] === 0x1f && buf[1] === 0x8b && typeof DecompressionStream !== 'undefined'){
+        buf = new Uint8Array(await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
+      }
+      return buf;
+    } catch(e){ last = e; await sleep(700); }
+  }
+  throw last;
+}
+
+const TILE_ROAD_W = { motorway:16, trunk:14, primary:12, secondary:10, tertiary:9, minor:7, service:4.5, track:3.5, path:2.5, raceway:6, busway:6, pier:4, bridge:6 };
+
+// Eine dekodierte Kachel in Meter-Koordinaten (0,0 = Kartenmitte) übernehmen
+function addTile(f, layers, tx, ty, lat0, lon0, half){
+  const n = 2**TILE_Z, kx = 111320*Math.cos(lat0*Math.PI/180), ky = 110540;
+  const each = (name, fn) => {
+    const L = layers[name]; if (!L) return;
+    const ext = L.extent || 4096;
+    const conv = ([px, py]) => {
+      const X = (tx + px/ext)/n, Y = (ty + py/ext)/n;
+      const lon = X*360 - 180, lat = Math.atan(Math.sinh(Math.PI*(1 - 2*Y)))*180/Math.PI;
+      return [(lon - lon0)*kx, -(lat - lat0)*ky];
+    };
+    for (const F of L.feats){
+      const parts = featGeom(F.geom).map(pt => pt.map(conv)).filter(pt => pt.length >= 2);
+      // behalten, wenn der Umriss das Spielgebiet berührt (auch lange Linien, deren Enden außerhalb liegen)
+      if (!parts.length || !parts.some(pt => {
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const [x, y] of pt){ if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        return x1 > -half && x0 < half && y1 > -half && y0 < half;
+      })) continue;
+      const props = {};
+      for (let i=0; i+1<F.tags.length; i+=2) props[L.keys[F.tags[i]]] = L.values[F.tags[i+1]];
+      fn(props, parts, F.type);
+    }
+  };
+  each('building', (p, parts, t) => { if (t === 3) f.buildings.push(parts); });
+  each('water', (p, parts, t) => { if (t === 3) f.water.push(parts); });
+  each('waterway', (p, parts, t) => {
+    if (t !== 2 || p.brunnel === 'tunnel') return;
+    const w = p.class === 'river' ? 12 : p.class === 'canal' ? 10 : p.class === 'stream' ? 3 : 0;
+    if (w) parts.forEach(pts => f.waterLines.push({ pts, w }));
+  });
+  each('transportation', (p, parts, t) => {
+    const c = String(p.class || '');
+    if (/^(ferry|aerialway|cable_car)/.test(c)) return;
+    if (t === 3){ if (!/^(rail|transit)/.test(c)) f.roadAreas.push(parts); return; }
+    if (t !== 2) return;
+    if (/^(rail|transit)/.test(c)){ if (p.brunnel !== 'tunnel') parts.forEach(pts => f.rails.push(pts)); return; }
+    const base = c.replace(/_construction$/, '');
+    let w = TILE_ROAD_W[base] || 5;
+    if (base === 'path' && p.subclass === 'pedestrian') w = 6;
+    const tunnel = p.brunnel === 'tunnel';
+    parts.forEach(pts => f.roads.push({ pts, w, tunnel, major: MAJOR.test(base), small: base === 'path' || base === 'track' }));
+  });
+  each('landcover', (p, parts, t) => {
+    if (t !== 3) return;
+    if (p.class === 'wood') f.wood.push(parts);
+    else if (p.class === 'grass' || p.class === 'wetland') f.green.push(parts);
+  });
+  each('park', (p, parts, t) => { if (t === 3) f.green.push(parts); });
+  each('landuse', (p, parts, t) => { if (t === 3 && /^(cemetery|pitch|playground|stadium|garden)$/.test(p.class)) f.green.push(parts); });
+}
+
+async function fetchTilesArea(lat0, lon0, size, onStatus){
+  if (!tileTpl){
+    onStatus('Verbinde mit dem Kachelserver …');
+    const r = await fetch(TILEJSON);
+    if (!r.ok) throw new Error(`Kachelverzeichnis antwortet mit Fehler ${r.status}.`);
+    const j = await r.json();
+    tileTpl = j.tiles && j.tiles[0];
+    if (!tileTpl) throw new Error('Kachelverzeichnis ohne Kacheln.');
+  }
+  const n = 2**TILE_Z, half = size/2 + 40;
+  const nw = offsetLatLon(lat0, lon0, -half, -half), se = offsetLatLon(lat0, lon0, half, half);
+  const tX = lon => Math.floor((lon + 180)/360*n);
+  const tY = lat => { const r = lat*Math.PI/180; return Math.floor((1 - Math.log(Math.tan(r) + 1/Math.cos(r))/Math.PI)/2*n); };
+  const list = [];
+  for (let y = tY(nw.lat); y <= tY(se.lat); y++) for (let x = tX(nw.lon); x <= tX(se.lon); x++) list.push([x, y]);
+  const f = emptyFeatures();
+  let next = 0, done = 0;
+  onStatus(`Lade Kartenkacheln … 0 von ${list.length}`);
+  const worker = async () => {
+    while (next < list.length){
+      const [x, y] = list[next++];
+      const url = tileTpl.replace('{z}', TILE_Z).replace('{x}', x).replace('{y}', y);
+      const buf = await fetchTileBuf(url);
+      if (buf) addTile(f, decodeTile(buf), x, y, lat0, lon0, half);
+      done++;
+      onStatus(`Lade Kartenkacheln … ${done} von ${list.length}`);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  return f;
+}
+
 // Wege und Flächen aus Overpass in Meter-Koordinaten umrechnen (0,0 = Kartenmitte, y nach unten)
 const ROAD_W = {
   motorway:16, trunk:14, primary:12, secondary:10, tertiary:9, unclassified:7, residential:7,
@@ -626,74 +829,312 @@ async function cachePut(key, val){
 }
 
 /* =====================================================================
-   2) DEMO-STADT (funktioniert ohne Internet)
+   2) ZUFALLSSTADT (funktioniert ohne Internet, gleicher Seed = gleiche Stadt)
+   Fluss mit Brücken, Altstadt mit Marktplatz, Kirche und oft einer Stadtmauer,
+   drumherum Viertel: Einfamilienhäuser, Wohnblocks, Gewerbe, Parks und Wald.
    ===================================================================== */
-function demoFeatures(){
-  const rnd = mulberry32(1337);
-  const f = emptyFeatures();
-  const half = 400;
-  const riverY = x => 70 + 38*Math.sin(x/140) + 10*Math.sin(x/47);
-  const river = [];
-  for (let x=-460; x<=460; x+=10) river.push([x, riverY(x)]);
-  f.waterLines.push({ pts:river, w:24 });
-  const xs = [-350,-245,-135,-25,85,195,300];
-  const ys = [-345,-235,-125,-15,165,265,355];
-  const bridges = new Set([1,4,6]);
-  xs.forEach((x, i) => {
-    const jx = x + (rnd()-0.5)*8;
-    const w = (i===3) ? 11 : 7;
-    if (bridges.has(i)) f.roads.push({ pts:[[jx,-half-30],[jx,half+30]], w, major:i===3||i===1, small:false });
-    else {
-      f.roads.push({ pts:[[jx,-half-30],[jx,riverY(jx)-26]], w, major:i===3, small:false });
-      f.roads.push({ pts:[[jx,riverY(jx)+26],[jx,half+30]], w, major:i===3, small:false });
+function hashSeed(txt){
+  let h = 2166136261;
+  for (const ch of txt){ h ^= ch.codePointAt(0); h = Math.imul(h, 16777619); }
+  return (h >>> 0) % 999999 + 1;
+}
+function townName(rnd){
+  const pre = ['Ober', 'Unter', 'Nieder', 'Alt', 'Neu', 'Groß', 'Klein', 'Bad '];
+  const stem = ['linden', 'eichen', 'mühl', 'hasel', 'rot', 'wald', 'kirch', 'brunn', 'sand', 'stein', 'erlen', 'fichten', 'wolfs', 'raben', 'hirsch', 'birken', 'dachs', 'fuchs', 'weiden', 'schön'];
+  const suf = ['bach', 'burg', 'heim', 'hausen', 'dorf', 'feld', 'berg', 'au', 'brück', 'tal', 'hof', 'rode', 'weiler', 'stadt'];
+  const pick = a => a[(rnd()*a.length)|0];
+  const core = pick(stem) + pick(suf);
+  if (rnd() < 0.4){
+    const p = pick(pre);
+    return p.endsWith(' ') ? p + core[0].toUpperCase() + core.slice(1) : p + core;
+  }
+  return core[0].toUpperCase() + core.slice(1);
+}
+
+function randomCity(seed, S){
+  const rnd = mulberry32(seed*7919 + 13);
+  const R = (a, b) => a + (b - a)*rnd();
+  const H = S/2, f = emptyFeatures();
+  const name = townName(rnd);
+
+  // Planungsraster (1 m): occ = belegt (Straße, Wasser, Haus), wet = Flussufer-Zone
+  const E = S + 160, OC = 1, OW = Math.ceil(E/OC);
+  const occ = new Uint8Array(OW*OW), wet = new Uint8Array(OW*OW);
+  const oi = (x, y) => { const ix = Math.floor((x + E/2)/OC), iy = Math.floor((y + E/2)/OC); return (ix < 0 || iy < 0 || ix >= OW || iy >= OW) ? -1 : iy*OW + ix; };
+  const at = (arr, x, y) => { const i = oi(x, y); return i < 0 ? 1 : arr[i]; };
+  const disk = (arr, x, y, r, v) => {
+    for (let yy = -r; yy <= r; yy += 0.9) for (let xx = -r; xx <= r; xx += 0.9){
+      if (xx*xx + yy*yy > r*r) continue;
+      const i = oi(x + xx, y + yy); if (i >= 0 && arr[i] < v) arr[i] = v;
     }
-  });
-  ys.forEach((y, i) => {
-    const w = (i===2) ? 11 : 7;
-    f.roads.push({ pts:[[-half-30,y],[half+30,y+(rnd()-0.5)*10]], w, major:i===2, small:false });
-  });
-  const promenade = [];
-  for (let x=-460; x<=460; x+=10) promenade.push([x, riverY(x)-20]);
-  f.roads.push({ pts:promenade, w:3, small:true });
-  const px0 = xs[4], px1 = xs[5], py0 = ys[0], py1 = ys[1];
-  f.green.push([[[px0+5,py0+5],[px1-5,py0+5],[px1-5,py1-5],[px0+5,py1-5]]]);
-  const pond = []; for (let a=0; a<TAU; a+=0.3) pond.push([ (px0+px1)/2 + 26*Math.cos(a), (py0+py1)/2 + 18*Math.sin(a) ]);
-  f.water.push([pond]);
-  f.roads.push({ pts:[[px0,py0],[px1,py1]], w:2.6, small:true });
-  f.roads.push({ pts:[[px1,py0],[(px0+px1)/2+30,(py0+py1)/2-10]], w:2.6, small:true });
-  f.wood.push([[[-460,265+6],[xs[0]-6,265+6],[xs[0]-6,460],[-460,460]]]);
-  for (let i=0; i<xs.length-1; i++){
-    for (let j=0; j<ys.length-1; j++){
-      if (i===4 && j===0) continue; // Park
-      const x0 = xs[i]+9, x1 = xs[i+1]-9, y0 = ys[j]+9, y1 = ys[j+1]-9;
-      const edges = [
-        { ax:x0, ay:y0, dx:1, dy:0, len:x1-x0, nx:0, ny:1 },
-        { ax:x0, ay:y1, dx:1, dy:0, len:x1-x0, nx:0, ny:-1 },
-        { ax:x0, ay:y0, dx:0, dy:1, len:y1-y0, nx:1, ny:0 },
-        { ax:x1, ay:y0, dx:0, dy:1, len:y1-y0, nx:-1, ny:0 }
-      ];
-      edges.forEach((e, ei) => {
-        let p = (ei>1) ? 14 : 0;
-        const end = e.len - ((ei>1) ? 14 : 0);
-        while (p < end-6){
-          const wdt = 8 + rnd()*9, dep = 9 + rnd()*5;
-          const a = Math.min(end, p+wdt);
-          const cx = e.ax + e.dx*(p+a)/2 + e.nx*dep/2, cy = e.ay + e.dy*(p+a)/2 + e.ny*dep/2;
-          if (Math.abs(cy - riverY(cx)) > 28 + dep && rnd() > 0.08){
-            f.buildings.push([[
-              [e.ax+e.dx*p,           e.ay+e.dy*p],
-              [e.ax+e.dx*a,           e.ay+e.dy*a],
-              [e.ax+e.dx*a+e.nx*dep,  e.ay+e.dy*a+e.ny*dep],
-              [e.ax+e.dx*p+e.nx*dep,  e.ay+e.dy*p+e.ny*dep]
-            ]]);
-          }
-          p = a + (rnd() < 0.35 ? 3 + rnd()*5 : 0.5);
-        }
-      });
-      if (rnd() < 0.25) f.barriers.push({ pts:[[x0+22,(y0+y1)/2],[x1-22,(y0+y1)/2]], w:1 });
+  };
+  const stampLine = (arr, pts, r, v) => {
+    for (let k=1; k<pts.length; k++){
+      const [x0, y0] = pts[k-1], [x1, y1] = pts[k];
+      const n = Math.max(1, Math.ceil(Math.hypot(x1-x0, y1-y0)/1.5));
+      for (let q=0; q<=n; q++) disk(arr, x0 + (x1-x0)*q/n, y0 + (y1-y0)*q/n, r, v);
+    }
+  };
+  const inPoly = (x, y, poly) => {
+    let c = false;
+    for (let i=0, j=poly.length-1; i<poly.length; j=i++){
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if ((yi > y) !== (yj > y) && x < (xj - xi)*(y - yi)/(yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  const stampPoly = (arr, poly, v) => {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [x, y] of poly){ x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) if (inPoly(x, y, poly)){ const i = oi(x, y); if (i >= 0 && arr[i] < v) arr[i] = v; }
+  };
+  const wobble = (a1, l1, a2, l2) => { const p1 = R(0, TAU), p2 = R(0, TAU); return t => a1*Math.sin(t/l1 + p1) + a2*Math.sin(t/l2 + p2); };
+  const blob = (cx, cy, r, jag) => {
+    const p1 = R(0, TAU), p2 = R(0, TAU), k1 = 2 + (rnd()*3|0), k2 = 5 + (rnd()*4|0), out = [];
+    for (let a = 0; a < TAU; a += 0.12){ const rr = r*(1 + jag*Math.sin(k1*a + p1) + jag*0.5*Math.sin(k2*a + p2)); out.push([cx + Math.cos(a)*rr, cy + Math.sin(a)*rr]); }
+    return out;
+  };
+  const inMap = p => Math.abs(p[0]) < H + 40 && Math.abs(p[1]) < H + 40;
+  const dry = p => !at(wet, p[0], p[1]);
+  // Teilstücke einer Linie, die eine Bedingung erfüllen und lang genug sind
+  const runs = (pts, keep, minLen) => {
+    const out = []; let cur = [];
+    const flush = () => {
+      if (cur.length >= 2){ let L = 0; for (let k=1; k<cur.length; k++) L += Math.hypot(cur[k][0]-cur[k-1][0], cur[k][1]-cur[k-1][1]); if (L >= minLen) out.push(cur); }
+      cur = [];
+    };
+    for (const p of pts){ if (keep(p)) cur.push(p); else flush(); }
+    flush();
+    return out;
+  };
+  const streets = [];
+  const add = (pts, w, o = {}) => { if (pts.length >= 2) streets.push({ pts, w, major: !!o.major, small: !!o.small, art: !!o.art }); };
+
+  // --- Fluss und Bach ---
+  const rivers = [];
+  if (rnd() < 0.8){
+    const ang = R(0, TAU), ux = Math.cos(ang), uy = Math.sin(ang), off = R(-0.28, 0.28)*S, w = R(16, 30);
+    const wf = wobble(R(25, 60), R(140, 260), R(5, 14), R(35, 70));
+    const pts = [];
+    for (let t = -S; t <= S; t += 8){ const o = off + wf(t); pts.push([ux*t - uy*o, uy*t + ux*o]); }
+    rivers.push({ pts, w });
+    f.waterLines.push({ pts, w });
+    stampLine(wet, pts, w/2 + 7, 1);
+    stampLine(occ, pts, w/2 + 2, 1);
+  }
+  if (rnd() < 0.45){
+    const ang = R(0, TAU), ux = Math.cos(ang), uy = Math.sin(ang), off = R(-0.4, 0.4)*S;
+    const wf = wobble(R(10, 25), R(60, 120), R(3, 8), R(20, 40));
+    const pts = [];
+    for (let t = -S; t <= S; t += 6){ const o = off + wf(t); pts.push([ux*t - uy*o, uy*t + ux*o]); }
+    f.waterLines.push({ pts, w:3 });
+    stampLine(occ, pts, 3, 1);
+  }
+
+  // --- Altstadt-Mittelpunkt (nicht im Fluss) ---
+  const ROLD = Math.max(80, Math.min(230, S*R(0.12, 0.19)));
+  let C = [0, 0];
+  for (let k=0; k<60; k++){
+    C = [R(-0.22, 0.22)*S, R(-0.22, 0.22)*S];
+    let ok = !at(wet, C[0], C[1]);
+    for (let a = 0; a < TAU && ok; a += TAU/8) if (at(wet, C[0] + Math.cos(a)*ROLD*0.45, C[1] + Math.sin(a)*ROLD*0.45)) ok = false;
+    if (ok) break;
+  }
+
+  // --- Viertel (Voronoi um zufällige Mittelpunkte) ---
+  const OLD = { type:'old' }, D = [];
+  const K = 4 + Math.round(S/250);
+  for (let k=0; k<K; k++){
+    let p = [0, 0];
+    for (let t=0; t<40; t++){ p = [R(-0.6, 0.6)*S, R(-0.6, 0.6)*S]; if (Math.hypot(p[0]-C[0], p[1]-C[1]) > ROLD + 70) break; }
+    const edge = Math.max(Math.abs(p[0]), Math.abs(p[1])) > H*0.6;
+    const r = rnd();
+    let type = r < 0.36 ? 'detached' : r < 0.6 ? 'apart' : r < 0.72 ? 'industry' : r < 0.85 ? 'park' : 'forest';
+    if (type === 'forest' && !edge) type = 'detached';
+    const sp = type === 'industry' ? R(95, 140) : type === 'detached' ? R(55, 80) : R(65, 95);
+    D.push({ x:p[0], y:p[1], type, ang:R(0, Math.PI/2), sp, curvy: type === 'detached' && rnd() < 0.6, wf: wobble(R(4, 12), R(50, 110), 0, 1), blob:null });
+  }
+  const districtAt = (x, y) => {
+    if (Math.hypot(x - C[0], y - C[1]) < ROLD) return OLD;
+    let best = D[0], bd = Infinity;
+    for (const d of D){ const q = (d.x-x)**2 + (d.y-y)**2; if (q < bd){ bd = q; best = d; } }
+    return best;
+  };
+
+  // --- Parks (mit Teich) und Wald ---
+  const noBuild = [];
+  for (const d of D){
+    if (d.type === 'park'){
+      d.blob = blob(d.x, d.y, R(55, 110), 0.18);
+      f.green.push([d.blob]); noBuild.push(d.blob);
+      if (rnd() < 0.55){
+        const pond = blob(d.x + R(-15, 15), d.y + R(-15, 15), R(14, 30), 0.25);
+        f.water.push([pond]); stampPoly(occ, pond, 1);
+      }
+    } else if (d.type === 'forest'){
+      d.blob = blob(d.x, d.y, R(130, 260), 0.22);
+      f.wood.push([d.blob]); noBuild.push(d.blob);
     }
   }
-  return f;
+
+  // --- Hauptstraßen quer durch die Stadt (überqueren den Fluss als Brücken) ---
+  const nA = 2 + (rnd() < 0.55 ? 1 : 0), a0 = R(0, Math.PI);
+  for (let k=0; k<nA; k++){
+    const ang = a0 + k*Math.PI/nA + R(-0.22, 0.22), ux = Math.cos(ang), uy = Math.sin(ang);
+    const wf = wobble(R(10, 28), R(180, 380), R(2, 6), R(50, 110));
+    const c0 = [C[0] + R(-12, 12), C[1] + R(-12, 12)], pts = [];
+    for (let t = -S*1.2; t <= S*1.2; t += 10){ const o = wf(t)*Math.min(1, Math.abs(t)/ROLD); pts.push([c0[0] + ux*t - uy*o, c0[1] + uy*t + ux*o]); }
+    runs(pts, p => Math.abs(p[0]) < H + 80 && Math.abs(p[1]) < H + 80, 20).forEach(r => add(r, R(10, 12.5), { major:true, art:true }));
+  }
+
+  // --- Altstadt: Gassen sternförmig, ein Ring, Querverbindungen, Marktplatz, Kirche ---
+  const radials = [], nR = 6 + (rnd()*5|0);
+  for (let k=0; k<nR; k++){
+    const ang = k/nR*TAU + R(-0.25, 0.25), ph = R(0, TAU), len = ROLD*R(1.05, 1.2), pts = [];
+    for (let r = 20; r <= len; r += 6){ const a = ang + 0.18*Math.sin(r/35 + ph); pts.push([C[0] + Math.cos(a)*r, C[1] + Math.sin(a)*r]); }
+    radials.push(pts);
+    runs(pts, p => dry(p) && inMap(p), 20).forEach(r => add(r, R(4.5, 6.5)));
+  }
+  const rr = ROLD*R(0.5, 0.75), rp = R(0, TAU), ring = [];
+  for (let a = 0; a <= TAU + 0.01; a += 0.06){ const r = rr*(1 + 0.1*Math.sin(3*a + rp)); ring.push([C[0] + Math.cos(a)*r, C[1] + Math.sin(a)*r]); }
+  runs(ring, p => dry(p) && inMap(p), 20).forEach(r => add(r, 5.5));
+  for (let k = 0, nl = 6 + (rnd()*5|0); k < nl; k++){
+    const i = (rnd()*radials.length)|0, a = radials[i], b = radials[(i+1) % radials.length];
+    const m = Math.min(a.length, b.length); if (m < 4) continue;
+    const j = 2 + ((rnd()*(m-3))|0);
+    const pts = [a[j], [(a[j][0] + b[j][0])/2 + R(-6, 6), (a[j][1] + b[j][1])/2 + R(-6, 6)], b[j]];
+    if (pts.every(dry)) add(pts, R(3.5, 4.5));
+  }
+  const ma = R(0, Math.PI), mw = R(30, 46), mh = R(24, 34);
+  const rectPts = (cx, cy, ux, uy, w, h) => [[-1,-1], [1,-1], [1,1], [-1,1]].map(([a, b]) => [cx + ux*a*w/2 - uy*b*h/2, cy + uy*a*w/2 + ux*b*h/2]);
+  const mux = Math.cos(ma), muy = Math.sin(ma);
+  const market = rectPts(C[0], C[1], mux, muy, mw, mh);
+  f.roadAreas.push([market]);
+  stampPoly(occ, rectPts(C[0], C[1], mux, muy, mw + 4, mh + 4), 1);
+
+  // --- Stadtmauer (Tore entstehen dort, wo Straßen hindurchführen) ---
+  if (rnd() < 0.55){
+    const wr = ROLD*R(0.95, 1.0), wp = R(0, TAU), wall = [];
+    for (let a = 0; a <= TAU + 0.01; a += 0.05){ const r = wr*(1 + 0.06*Math.sin(4*a + wp)); wall.push([C[0] + Math.cos(a)*r, C[1] + Math.sin(a)*r]); }
+    runs(wall, p => dry(p) && inMap(p), 10).forEach(r => { f.barriers.push({ pts:r, w:2.6 }); stampLine(occ, r, 2.5, 1); });
+  }
+
+  // --- Straßenraster der Viertel, Waldwege, Parkwege ---
+  for (const d of D){
+    const ux = Math.cos(d.ang), uy = Math.sin(d.ang);
+    if (d.type === 'forest'){
+      for (let k=0; k<2; k++){
+        const a = R(0, TAU), ca = Math.cos(a), sa = Math.sin(a), wf = wobble(R(6, 16), R(40, 90), 0, 1), pts = [];
+        for (let t = -320; t <= 320; t += 6){ const o = wf(t); pts.push([d.x + ca*t - sa*o, d.y + sa*t + ca*o]); }
+        runs(pts, p => inMap(p) && dry(p) && districtAt(p[0], p[1]) === d, 30).forEach(r => add(r, 3.2, { small:true }));
+      }
+      continue;
+    }
+    const w = d.type === 'industry' ? 8 : d.type === 'apart' ? 7 : 6;
+    for (const dir of [0, 1]){
+      const vx = dir ? -uy : ux, vy = dir ? ux : uy, nx = -vy, ny = vx, off0 = R(0, d.sp);
+      for (let i = -7; i <= 7; i++){
+        const o = off0 + i*d.sp + R(-6, 6), pts = [];
+        for (let t = -S*0.8; t <= S*0.8; t += 5){
+          const ww = d.curvy ? d.wf(t + o*1.3) : 0;
+          pts.push([d.x + vx*t + nx*(o + ww), d.y + vy*t + ny*(o + ww)]);
+        }
+        runs(pts, p => inMap(p) && dry(p) && districtAt(p[0], p[1]) === d, 35).forEach(r => add(r, w));
+      }
+    }
+    if (d.type === 'park' && d.blob){
+      for (let k=0; k<3; k++){
+        const a = d.blob[(rnd()*d.blob.length)|0], b = d.blob[(rnd()*d.blob.length)|0];
+        add([a, [(a[0] + b[0])/2 + R(-15, 15), (a[1] + b[1])/2 + R(-15, 15)], b], 2.6, { small:true });
+      }
+    }
+  }
+
+  // --- Fußgängerbrücken und Uferweg ---
+  for (const rv of rivers){
+    for (let k = 0, nb = 1 + (rnd() < 0.6 ? 1 : 0); k < nb; k++){
+      const i = (rnd()*(rv.pts.length - 20) + 10)|0, p = rv.pts[i], q = rv.pts[i+1];
+      if (!inMap(p)) continue;
+      const dx = q[0]-p[0], dy = q[1]-p[1], L = Math.hypot(dx, dy) || 1, nx = -dy/L, ny = dx/L, r = rv.w/2 + 10;
+      add([[p[0] - nx*r, p[1] - ny*r], [p[0] + nx*r, p[1] + ny*r]], 3, { small:true });
+    }
+    const side = rnd() < 0.5 ? -1 : 1;
+    const prom = rv.pts.map((p, i) => {
+      const q = rv.pts[Math.min(i+1, rv.pts.length-1)], o = rv.pts[Math.max(i-1, 0)];
+      const dx = q[0]-o[0], dy = q[1]-o[1], L = Math.hypot(dx, dy) || 1;
+      return [p[0] - dy/L*side*(rv.w/2 + 5), p[1] + dx/L*side*(rv.w/2 + 5)];
+    });
+    runs(prom, inMap, 30).forEach(r => add(r, 3, { small:true }));
+  }
+
+  // --- Bahnlinie ---
+  if (rnd() < 0.5){
+    const ang = R(0, TAU), ux = Math.cos(ang), uy = Math.sin(ang), off = R(-0.45, 0.45)*S, wf = wobble(R(5, 15), R(300, 500), 0, 1), pts = [];
+    for (let t = -S; t <= S; t += 12){ const o = off + wf(t); pts.push([ux*t - uy*o, uy*t + ux*o]); }
+    f.rails.push(pts); stampLine(occ, pts, 4, 1);
+  }
+
+  // Straßen in die Planung eintragen, damit keine Häuser darauf landen
+  for (const st of streets) stampLine(occ, st.pts, st.w/2 + (st.small ? 0.3 : 0.6), 1);
+
+  // --- Häuser entlang der Straßen ---
+  const sampleRect = (cx, cy, ux, uy, w, h, fn, step = 1) => {
+    const nu = Math.max(1, Math.ceil(w/step)), nv = Math.max(1, Math.ceil(h/step));
+    for (let i=0; i<=nu; i++) for (let j=0; j<=nv; j++){
+      const a = (i/nu - 0.5)*w, b = (j/nv - 0.5)*h;
+      if (fn(cx + ux*a - uy*b, cy + uy*a + ux*b) === false) return false;
+    }
+    return true;
+  };
+  const canPlace = (cx, cy, ux, uy, w, h, m) => sampleRect(cx, cy, ux, uy, w + 2*m, h + 2*m, (x, y) => !at(occ, x, y));
+  const placeB = (cx, cy, ux, uy, w, h) => {
+    sampleRect(cx, cy, ux, uy, w, h, (x, y) => { const i = oi(x, y); if (i >= 0) occ[i] = 3; }, 0.7);
+    f.buildings.push([rectPts(cx, cy, ux, uy, w, h)]);
+  };
+  // Kirche am Marktplatz
+  {
+    const cx = C[0] - muy*(mh/2 + 13), cy = C[1] + mux*(mh/2 + 13);
+    if (canPlace(cx, cy, mux, muy, 30, 14, 0.5)) placeB(cx, cy, mux, muy, 30, 14);
+  }
+  const PARAM = {
+    old:      { set:1.2, w:[7, 12],  d:[9, 13],  gap:[0.3, 0.8], gapP:0.2, gapBig:[2, 4], m:-0.2, rows:2 },
+    apart:    { set:3,   w:[14, 30], d:[10, 14], gap:[5, 12],  m:1.2, rows:1 },
+    detached: { set:5,   w:[8, 12],  d:[8, 11],  gap:[8, 15],  m:1.5, rows:1 },
+    industry: { set:8,   w:[24, 55], d:[18, 36], gap:[10, 22], m:2,   rows:1 },
+    park:     { set:5,   w:[8, 12],  d:[8, 11],  gap:[10, 18], m:1.5, rows:1 }
+  };
+  for (const st of streets){
+    if (st.small) continue;
+    const pts = st.pts, cum = [0];
+    for (let k=1; k<pts.length; k++) cum.push(cum[k-1] + Math.hypot(pts[k][0]-pts[k-1][0], pts[k][1]-pts[k-1][1]));
+    const total = cum[cum.length-1];
+    let seg = 0, sPos = R(0, 6);
+    while (sPos < total){
+      while (seg < pts.length-2 && cum[seg+1] < sPos) seg++;
+      const p = pts[seg], q = pts[seg+1], L = (cum[seg+1] - cum[seg]) || 1, t = (sPos - cum[seg])/L;
+      const ux = (q[0]-p[0])/L, uy = (q[1]-p[1])/L, x = p[0] + (q[0]-p[0])*t, y = p[1] + (q[1]-p[1])*t;
+      const P = PARAM[districtAt(x, y).type];
+      if (!P){ sPos += 12; continue; }
+      const bw = R(P.w[0], P.w[1]);
+      for (const side of [-1, 1]){
+        let off = st.w/2 + P.set;
+        for (let row = 0; row < P.rows; row++){
+          const bd = R(P.d[0], P.d[1]);
+          const cx = x + ux*bw/2 - uy*side*(off + bd/2), cy = y + uy*bw/2 + ux*side*(off + bd/2);
+          off += bd + 0.6;
+          if (row > 0 && rnd() < 0.5) continue;
+          if (Math.abs(cx) > H + 15 || Math.abs(cy) > H + 15) continue;
+          if (noBuild.some(b => inPoly(cx, cy, b))) continue;
+          if (canPlace(cx, cy, ux, uy, bw, bd, P.m)) placeB(cx, cy, ux, uy, bw, bd);
+        }
+      }
+      const gap = (P.gapP != null && rnd() < P.gapP) ? R(P.gapBig[0], P.gapBig[1]) : R(P.gap[0], P.gap[1]);
+      sPos += bw + gap;
+    }
+  }
+
+  for (const st of streets) f.roads.push({ pts:st.pts, w:st.w, tunnel:false, major:st.major, small:st.small });
+  return { f, name };
 }
 
 /* =====================================================================
@@ -824,8 +1265,11 @@ function renderCache(f, size){
   });
 
   // Mauern/Zäune aus OSM
-  g.strokeStyle = COL.barrier; g.lineWidth = 0.9;
-  g.beginPath(); f.barriers.forEach(b => traceLine(g, b.pts)); g.stroke();
+  f.barriers.forEach(b => {
+    const big = b.w >= 2;
+    g.strokeStyle = big ? '#5a6774' : COL.barrier; g.lineWidth = big ? b.w : 0.9;
+    g.beginPath(); traceLine(g, b.pts); g.stroke();
+  });
 
   // Häuser
   fill(f.buildings, COL.bldg);
@@ -2015,11 +2459,11 @@ function openMenu(){
     ['Erledigt', String(G.kills)],
     ['Türme', `${fl} Flamme · ${te} Tesla`],
     ['Mauern', `${Math.round(G.walls.reduce((s, w) => s + w.len, 0))} m`]
-  ], [
+  ].concat(lastMap.seed != null ? [['Seed', lastMap.seedLabel]] : []), [
     { label:'Weiter', cls:'primary', fn:() => { running = true; syncPlay(); } },
-    { label:'Neu starten, gleiche Karte', fn:() => resetGame() },
-    { label:'Anderen Ort wählen', cls:'ghost', fn:() => backToStart() }
-  ]);
+    { label:'Neu starten, gleiche Karte', fn:() => resetGame() }
+  ].concat(lastMap.seed != null ? [{ label:'Neue Zufallsstadt', fn:() => { seedIn.value = newSeed(); buildRandom(); } }] : [])
+   .concat([{ label:'Anderen Ort wählen', cls:'ghost', fn:() => backToStart() }]));
 }
 
 function endScreen(won, c){
@@ -2041,6 +2485,16 @@ function endScreen(won, c){
   ]);
 }
 
+const ATTR = {
+  tiles: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OSM</a>',
+  osm: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+};
+function setAttribution(m){
+  const el = $('.osm');
+  if (m.seed != null) el.textContent = 'Zufallsstadt · Seed ' + m.seedLabel;
+  else el.innerHTML = ATTR[m.src] || ATTR.osm;
+}
+
 function backToStart(){
   running = false;
   $('#hud').hidden = true; $('#dock').hidden = true;
@@ -2057,14 +2511,15 @@ let busy = false;
 
 async function launch(getMap){
   if (busy) return;
-  busy = true; $('#loadBtn').disabled = true; $('#demoBtn').disabled = true;
+  busy = true; $('#loadBtn').disabled = true; $('#randBtn').disabled = true;
   try {
-    const { f, size, name } = await getMap();
+    const m = await getMap();
     setStatus('Berechne Laufwege …'); await nextFrame();
     const humans = +popIn.value;
-    newGame(f, size, name, humans);
-    lastMap = { f, size, name, humans };
-    $('#placeName').textContent = name;
+    newGame(m.f, m.size, m.name, humans);
+    lastMap = { ...m, humans };
+    $('#placeName').textContent = m.name;
+    setAttribution(lastMap);
     $('#start').hidden = true; $('#hud').hidden = false; $('#dock').hidden = false;
     fitCamera(); clampCam();
     setTool('outbreak');
@@ -2074,26 +2529,33 @@ async function launch(getMap){
   } catch(e){
     setStatus(e.message || String(e), true);
   } finally {
-    busy = false; $('#loadBtn').disabled = false; $('#demoBtn').disabled = false;
+    busy = false; $('#loadBtn').disabled = false; $('#randBtn').disabled = false;
   }
 }
 
 async function loadReal(lat, lon, name){
   const size = +$('#area').value;
-  const key = `${lat.toFixed(4)},${lon.toFixed(4)},${size}`;
+  const key = `v2:${lat.toFixed(4)},${lon.toFixed(4)},${size}`;
   setStatus('Prüfe Zwischenspeicher …');
   let f = await cacheGet(key);
   if (!f){
-    const json = await fetchArea(lat, lon, size, (part, total, srv) => {
-      const piece = total > 1 ? `, Teil ${part} von ${total}` : '';
-      setStatus(srv ? `Lade Kartendaten${piece} (Ersatzserver ${srv}) …` : `Lade Straßen, Häuser und Gewässer von OpenStreetMap${piece} …`);
-    });
-    setStatus('Verarbeite Kartendaten …'); await nextFrame();
-    f = parseOSM(json, lat, lon);
+    try {
+      f = await fetchTilesArea(lat, lon, size, msg => setStatus(msg));
+      f.src = 'tiles';
+    } catch(e){
+      setStatus('Kachelserver nicht erreichbar, versuche Overpass …'); await sleep(700);
+      const json = await fetchArea(lat, lon, size, (part, total, srv) => {
+        const piece = total > 1 ? `, Teil ${part} von ${total}` : '';
+        setStatus(srv ? `Lade Kartendaten${piece} (Ersatzserver ${srv}) …` : `Lade Kartendaten über Overpass${piece} …`);
+      });
+      setStatus('Verarbeite Kartendaten …'); await nextFrame();
+      f = parseOSM(json, lat, lon);
+      f.src = 'osm';
+    }
     if (!f.roads.length && !f.buildings.length) throw new Error('An diesem Ort gibt es keine Kartendaten. Wähle einen bewohnten Ort.');
     cachePut(key, f);
   }
-  return { f, size, name };
+  return { f, size, name, src: f.src || 'osm' };
 }
 
 $('#loadBtn').addEventListener('click', () => launch(async () => {
@@ -2117,7 +2579,23 @@ $('#geoBtn').addEventListener('click', () => {
   }, { enableHighAccuracy:true, timeout:12000, maximumAge:60000 });
 });
 
-$('#demoBtn').addEventListener('click', () => launch(async () => ({ f: demoFeatures(), size: 800, name: 'Demo-Stadt' })));
+const seedIn = $('#seed');
+const newSeed = () => String(1 + Math.floor(Math.random()*999999));
+seedIn.value = newSeed();
+$('#diceBtn').addEventListener('click', () => { seedIn.value = newSeed(); });
+function buildRandom(){
+  return launch(async () => {
+    let label = seedIn.value.trim();
+    if (!label){ label = newSeed(); seedIn.value = label; }
+    const seed = /^\d+$/.test(label) ? (parseInt(label, 10) % 999999) + 1 : hashSeed(label);
+    const size = +$('#area').value;
+    setStatus('Baue Zufallsstadt …'); await nextFrame();
+    const { f, name } = randomCity(seed, size);
+    return { f, size, name, seed, seedLabel: label };
+  });
+}
+$('#randBtn').addEventListener('click', buildRandom);
+seedIn.addEventListener('keydown', e => { if (e.key === 'Enter') buildRandom(); });
 
 /* =====================================================================
    13) HAUPTSCHLEIFE
@@ -2143,7 +2621,7 @@ function frame(now){
 requestAnimationFrame(frame);
 
 // Test-Zugang für die Konsole
-window.__ausbruch = { get G(){ return G; }, cam, placeOutbreak, placeSoldier, placeTower, addWall, setTool, step, updateFields, counts };
+window.__ausbruch = { get G(){ return G; }, cam, randomCity, decodeTile, addTile, emptyFeatures, placeOutbreak, placeSoldier, placeTower, addWall, setTool, step, updateFields, counts };
 </script>
 </body>
 </html>
