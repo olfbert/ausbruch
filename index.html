@@ -183,7 +183,7 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
     <dl class="legend">
       <dt><span class="dot h"></span></dt><dd><b>Mensch</b> <span class="num">· 1,4 m/s, meist in Gruppen</span></dd>
       <dt><span class="dot z"></span></dt><dd><b>Zombie</b> <span class="num">· 2,8 m/s</span></dd>
-      <dt><span class="dot s"></span></dt><dd><b>Soldat</b> <span class="num">· schießt bis 30 m</span></dd>
+      <dt><span class="dot s"></span></dt><dd><b>Soldat</b> <span class="num">· schießt bis 45 m</span></dd>
       <dt><span class="mk f"></span></dt><dd><b>Flammenturm</b> <span class="num">· 16 m, setzt in Brand</span></dd>
       <dt><span class="mk t"></span></dt><dd><b>Teslaturm</b> <span class="num">· 26 m, Blitz springt weiter</span></dd>
     </dl>
@@ -331,7 +331,7 @@ const TRAIL_STEP = 1;               // m Abstand der Spurpunkte des Anführers
 const TRAIL_MAX = 70;               // Spurpunkte, danach ist man abgehängt
 
 // Verteidigung
-const SOLDIER_RANGE = 30, SOLDIER_COOLDOWN = 0.9, SOLDIER_HIT = 0.75, SOLDIER_DMG = 100;
+const SOLDIER_RANGE = 45, SOLDIER_COOLDOWN = 0.9, SOLDIER_HIT = 0.75, SOLDIER_DMG = 100;
 const FLAME_RANGE = 16;             // m
 const FLAME_HALF = 0.5;             // rad, halber Öffnungswinkel (≈ 29°)
 const FLAME_DPS = 90;               // Schaden pro Sekunde im Kegel
@@ -411,7 +411,7 @@ function buildQuery(lat, lon, size){
   const half = size/2*1.08;
   const dLat = half/110540, dLon = half/(111320*Math.cos(lat*Math.PI/180));
   const bb = `${(lat-dLat).toFixed(6)},${(lon-dLon).toFixed(6)},${(lat+dLat).toFixed(6)},${(lon+dLon).toFixed(6)}`;
-  return `[out:json][timeout:60];
+  return `[out:json][timeout:90];
 (
  way["building"](${bb});
  relation["building"]["type"="multipolygon"](${bb});
@@ -422,32 +422,80 @@ function buildQuery(lat, lon, size){
  way["highway"](${bb});
  way["barrier"~"^(wall|city_wall|fence|retaining_wall|hedge)$"](${bb});
  way["leisure"~"^(park|garden|pitch|playground|sports_centre)$"](${bb});
- way["landuse"~"^(grass|meadow|forest|recreation_ground|village_green|cemetery|allotments|orchard|farmland)$"](${bb});
- way["natural"~"^(wood|scrub|grassland)$"](${bb});
+ way["landuse"~"^(grass|meadow|forest|recreation_ground|village_green|cemetery|allotments)$"](${bb});
+ way["natural"~"^(wood|scrub)$"](${bb});
  way["railway"~"^(rail|tram|light_rail|subway)$"](${bb});
 );
-out geom;`;
+out geom qt;`;
 }
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Eine Abfrage, nacheinander an alle Server. Fehler 504/429 oder Zeitüberschreitung gelten als
+// "wiederholbar": dann lohnt es, das Gebiet in kleinere Stücke zu teilen.
 async function fetchOverpass(query, onTry){
-  let lastErr = null;
+  let lastErr = null, retryable = false;
   for (let i=0; i<OVERPASS.length; i++){
-    const ep = OVERPASS[i];
     onTry && onTry(i);
     const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 75000);
+    const to = setTimeout(() => ctrl.abort(), 95000);
     try {
-      const r = await fetch(ep, { method:'POST', body:'data='+encodeURIComponent(query),
+      const r = await fetch(OVERPASS[i], { method:'POST', body:'data='+encodeURIComponent(query),
         headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, signal:ctrl.signal });
       clearTimeout(to);
-      if (!r.ok){ lastErr = new Error(r.status===429 ? 'Kartenserver ist gerade ausgelastet.' : `Kartenserver antwortet mit Fehler ${r.status}.`); continue; }
-      return await r.json();
+      if (!r.ok){
+        if (r.status===504 || r.status===429 || r.status===503) retryable = true;
+        lastErr = r.status===429 ? 'Kartenserver ist gerade ausgelastet.' : `Kartenserver antwortet mit Fehler ${r.status}.`;
+        await sleep(800);
+        continue;
+      }
+      const json = await r.json();
+      // Overpass meldet Zeitüberschreitungen manchmal mit Status 200 und einem Hinweis
+      if (json.remark && /timed out|out of memory|runtime error/i.test(json.remark)){
+        retryable = true; lastErr = 'Kartenserver hat das Gebiet nicht rechtzeitig geschafft.';
+        continue;
+      }
+      return json;
     } catch(e){
       clearTimeout(to);
-      lastErr = new Error(e.name==='AbortError' ? 'Kartenserver hat zu lange gebraucht.' : 'Kartenserver nicht erreichbar.');
+      retryable = true;
+      lastErr = e.name==='AbortError' ? 'Kartenserver hat zu lange gebraucht.' : 'Kartenserver nicht erreichbar.';
     }
   }
-  throw new Error((lastErr ? lastErr.message+' ' : '') + 'Versuch es gleich noch einmal oder wähle ein kleineres Gebiet.');
+  const err = new Error((lastErr ? lastErr+' ' : '') + 'Versuch es gleich noch einmal oder wähle ein kleineres Gebiet.');
+  err.retryable = retryable;
+  throw err;
+}
+
+// Große Gebiete in Teilstücken laden und zusammensetzen.
+// 1,5 km wird gleich in 4 Stücke geteilt; scheitert ein Stück am Zeitlimit, wird es nochmal geviertelt.
+function offsetLatLon(lat, lon, dx, dy){
+  return { lat: lat - dy/110540, lon: lon + dx/(111320*Math.cos(lat*Math.PI/180)) };
+}
+async function fetchArea(lat, lon, size, onStatus){
+  const n = size > 1000 ? 2 : 1, st = size/n;
+  const jobs = [];
+  for (let ty=0; ty<n; ty++) for (let tx=0; tx<n; tx++)
+    jobs.push({ dx: -size/2 + st*(tx+0.5), dy: -size/2 + st*(ty+0.5), s: st, depth: 0 });
+  const seen = new Map();
+  let done = 0, total = jobs.length;
+  while (jobs.length){
+    const j = jobs.shift();
+    const c = offsetLatLon(lat, lon, j.dx, j.dy);
+    try {
+      const json = await fetchOverpass(buildQuery(c.lat, c.lon, j.s), i => onStatus(done+1, total, i));
+      for (const el of json.elements || []) seen.set(el.type + el.id, el);
+      done++;
+    } catch(e){
+      if (!e.retryable || j.depth >= 2) throw e;
+      const q = j.s/2;
+      for (const [ox, oy] of [[-1,-1],[1,-1],[-1,1],[1,1]])
+        jobs.unshift({ dx: j.dx + ox*q/2, dy: j.dy + oy*q/2, s: q, depth: j.depth + 1 });
+      total += 3;
+    }
+    if (jobs.length) await sleep(400);
+  }
+  return { elements: [...seen.values()] };
 }
 
 // Wege und Flächen aus Overpass in Meter-Koordinaten umrechnen (0,0 = Kartenmitte, y nach unten)
@@ -815,7 +863,7 @@ function newGame(f, size, name, humans){
     wallCount: new Uint8Array(N), towerCount: new Uint8Array(N),
     roadCells: Int32Array.from(roadCells), openCells: Int32Array.from(openCells),
     distH: new Int16Array(N), distZ: new Int16Array(N), queue: new Int32Array(N),
-    agents: [], walls: [], towers: [], corpses: [], fx: [], tracers: [], bolts: [],
+    agents: [], walls: [], towers: [], corpses: [], fx: [], tracers: [], bolts: [], parts: [],
     time: 0, fieldT: 0, started: false, ended: false, kills: 0, maxZ: 0, humans0: 0, _lastKills: -1,
     hashSize: 4, hashW: hw, ph: newHash(hw), zh: newHash(hw),
     cache: renderCache(f, size)
@@ -828,7 +876,7 @@ function refreshBlock(i){ G.block[i] = (G.base[i]===0 || G.wallCount[i] || G.tow
 
 function resetGame(){
   if (!lastMap) return;
-  G.agents = []; G.corpses = []; G.fx = []; G.tracers = []; G.bolts = [];
+  G.agents = []; G.corpses = []; G.fx = []; G.tracers = []; G.bolts = []; G.parts = [];
   G.walls = []; G.towers = []; G.wallCount.fill(0); G.towerCount.fill(0);
   for (let i=0; i<G.N; i++) G.block[i] = G.base[i]===0 ? 1 : 0;
   G.time = 0; G.fieldT = 0; G.started = false; G.ended = false; G.kills = 0; G.maxZ = 0; G._lastKills = -1;
@@ -1452,18 +1500,102 @@ function circles(list, rad){
   for (const a of list){ ctx.moveTo(a.x + rad, a.y); ctx.arc(a.x, a.y, rad, 0, TAU); }
 }
 
-// gezackter Blitz zwischen zwei Punkten
-function boltPath(x0, y0, x1, y1, jag){
-  const n = 6, nx = -(y1-y0), ny = x1-x0, l = Math.hypot(nx, ny) || 1;
-  ctx.moveTo(x0, y0);
-  for (let k=1; k<n; k++){
-    const t = k/n, o = (rand()-0.5)*jag;
-    ctx.lineTo(x0 + (x1-x0)*t + nx/l*o, y0 + (y1-y0)*t + ny/l*o);
-  }
-  ctx.lineTo(x1, y1);
+
+// ---------- Partikel und Glühen (nur Optik, laufen in Echtzeit) ----------
+const PARTS_MAX = 2600, BOLT_MS = 320;
+function emit(p){ if (G.parts.length < PARTS_MAX) G.parts.push(p); }
+
+// runder Lichtfleck mit weichem Rand
+function glow(x, y, r, inner, mid){
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, inner); g.addColorStop(0.4, mid); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
 }
 
-function render(now){
+// gezackte Linie; die Zacken haben auch weit herausgezoomt ein paar Pixel Ausschlag
+function jagged(p0, p1, s){
+  const dx = p1[0]-p0[0], dy = p1[1]-p0[1], len = Math.hypot(dx, dy) || 1;
+  const n = Math.max(4, Math.min(14, Math.ceil(len/2.2)));
+  const amp = Math.max(Math.min(2.4, len*0.15), Math.min(len*0.3, 4/s));
+  const nx = -dy/len, ny = dx/len, out = [p0];
+  for (let k=1; k<n; k++){
+    const t = k/n, o = (rand()-0.5)*2*amp;
+    out.push([p0[0] + dx*t + nx*o, p0[1] + dy*t + ny*o]);
+  }
+  out.push(p1);
+  return out;
+}
+
+function sparks(x, y){
+  for (let k=0; k<7; k++){
+    const a = rand()*TAU, sp = 8 + rand()*16;
+    emit({ k:2, x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, age:0, life:0.2 + rand()*0.15, s0:0.6, s1:0.15, drag:5 });
+  }
+}
+
+// neue Partikel: Flammenstrahl, Glut über brennenden Zombies, Knistern an geladenen Teslatürmen
+function emitFx(rdt, now){
+  for (const t of G.towers){
+    if (t.type === 'flame'){
+      if (!t.firing) continue;
+      const n = Math.max(1, Math.round(rdt*280));
+      const nx = t.x + Math.cos(t.h)*1.6, ny = t.y + Math.sin(t.h)*1.6;
+      for (let k=0; k<n; k++){
+        const a = t.h + (rand()-0.5)*FLAME_HALF*1.6;
+        const sp = FLAME_RANGE/0.27*(0.6 + rand()*0.5);
+        emit({ k:0, x:nx, y:ny, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, age:0, life:0.3 + rand()*0.12, s0:0.5, s1:2.4 + rand()*1.6, drag:1.0 });
+      }
+    } else if (t.cd < 0.5 && rand() < rdt*7){
+      const a = rand()*TAU, r = Math.max(2.2, 7/cam.s)*(0.6 + rand()*0.6);
+      G.bolts.push({ pts:[[t.x, t.y], [t.x + Math.cos(a)*r, t.y + Math.sin(a)*r]], t:now, small:true });
+    }
+  }
+  for (const z of G.agents){
+    if (!z.alive || z.t !== Z || !(z.burn > 0)) continue;
+    if (rand() < rdt*16) emit({ k:1, x:z.x + (rand()-0.5)*1.2, y:z.y + (rand()-0.5)*1.2, vx:(rand()-0.5)*2.5, vy:-2.5 - rand()*3.5, age:0, life:0.4 + rand()*0.35, s0:0.7, s1:0.2, drag:0.6 });
+  }
+}
+
+function updParts(rdt){
+  const ps = G.parts;
+  let w = 0;
+  for (let i=0; i<ps.length; i++){
+    const p = ps[i];
+    p.age += rdt;
+    if (p.age >= p.life) continue;
+    const f = Math.exp(-p.drag*rdt);
+    p.vx *= f; p.vy *= f;
+    p.x += p.vx*rdt; p.y += p.vy*rdt;
+    if (p.k === 0){ const c = cellIndex(p.x, p.y); if (c < 0 || G.opaque[c]) continue; }   // Flammen enden an Hauswänden
+    ps[w++] = p;
+  }
+  ps.length = w;
+}
+
+const PART_STYLE = ['rgba(255,244,200,0.85)', 'rgba(255,150,40,0.55)', 'rgba(215,55,15,0.3)', 'rgba(255,170,60,0.85)', 'rgba(190,240,255,0.95)'];
+const PART_MINPX = [2.2, 3, 3.6, 1.7, 1.4];
+function drawParts(s){
+  if (!G.parts.length) return;
+  const bins = [[], [], [], [], []];
+  for (const p of G.parts){
+    const q = p.age/p.life;
+    if (p.k === 0) bins[q < 0.22 ? 0 : q < 0.6 ? 1 : 2].push(p);
+    else bins[p.k === 1 ? 3 : 4].push(p);
+  }
+  for (let b=0; b<5; b++){
+    const list = bins[b]; if (!list.length) continue;
+    const mr = PART_MINPX[b]/s;
+    ctx.fillStyle = PART_STYLE[b]; ctx.beginPath();
+    for (const p of list){
+      const r = Math.max(p.s0 + (p.s1 - p.s0)*(p.age/p.life), mr);
+      ctx.moveTo(p.x + r, p.y); ctx.arc(p.x, p.y, r, 0, TAU);
+    }
+    ctx.fill();
+  }
+}
+
+function render(now, rdt){
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = COL.void; ctx.fillRect(0, 0, VW, VH);
@@ -1474,6 +1606,8 @@ function render(now){
   ctx.drawImage(G.cache, -G.half, -G.half, G.size, G.size);
   ctx.strokeStyle = COL.frame; ctx.lineWidth = 1.5/s;
   ctx.strokeRect(-G.half, -G.half, G.size, G.size);
+
+  if (running && rdt > 0){ emitFx(rdt, now); updParts(rdt); }
 
   // sichtbarer Ausschnitt in Metern (zum Aussortieren)
   const vx0 = -cam.x/s - 30, vy0 = -cam.y/s - 30, vx1 = (VW-cam.x)/s + 30, vy1 = (VH-cam.y)/s + 30;
@@ -1544,7 +1678,7 @@ function render(now){
   ctx.fillStyle = COL.zombieGlow; circles(zs, r*2.6); ctx.fill();
   const burning = zs.filter(z => z.burn > 0);
   if (burning.length){
-    ctx.fillStyle = `rgba(255,${100 + (rand()*60|0)},40,0.55)`; circles(burning, r*(1.7 + rand()*0.5)); ctx.fill();
+    ctx.fillStyle = `rgba(255,${100 + (rand()*60|0)},40,0.6)`; circles(burning, Math.max(r*1.9, 4.5/s)*(0.85 + rand()*0.3)); ctx.fill();
   }
   // Menschen, Zombies
   ctx.fillStyle = COL.human; circles(hs, r); ctx.fill();
@@ -1561,29 +1695,55 @@ function render(now){
     ctx.stroke();
   }
 
-  // Leuchtende Effekte: Flammen, Blitze, Schüsse
+  // Leuchtende Effekte: Flammen, Blitze, Schüsse (additiv gemischt, damit sie glühen)
   ctx.globalCompositeOperation = 'lighter';
-  if (running){
-    for (const t of towers){
-      if (t.type !== 'flame' || !t.firing) continue;
-      const R = FLAME_RANGE*(0.86 + 0.14*rand());
-      const grd = ctx.createRadialGradient(t.x, t.y, 0.5, t.x, t.y, R);
-      grd.addColorStop(0, 'rgba(255,236,170,0.9)');
-      grd.addColorStop(0.35, 'rgba(255,150,45,0.55)');
-      grd.addColorStop(1, 'rgba(255,60,20,0)');
-      ctx.fillStyle = grd;
-      ctx.beginPath(); ctx.moveTo(t.x, t.y);
-      ctx.arc(t.x, t.y, R, t.h - FLAME_HALF*0.9, t.h + FLAME_HALF*0.9); ctx.closePath(); ctx.fill();
-    }
+  for (const t of towers){
+    if (t.type !== 'flame' || !t.firing) continue;
+    // Kegel als weicher Grundschein
+    const R = FLAME_RANGE*(0.85 + 0.15*rand());
+    const grd = ctx.createRadialGradient(t.x, t.y, 0.5, t.x, t.y, R);
+    grd.addColorStop(0, 'rgba(255,230,160,0.55)');
+    grd.addColorStop(0.4, 'rgba(255,130,35,0.3)');
+    grd.addColorStop(1, 'rgba(255,60,20,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.moveTo(t.x, t.y);
+    ctx.arc(t.x, t.y, R, t.h - FLAME_HALF*0.9, t.h + FLAME_HALF*0.9); ctx.closePath(); ctx.fill();
+    // Mündungsfeuer, auch aus der Übersicht gut zu sehen
+    glow(t.x + Math.cos(t.h)*1.6, t.y + Math.sin(t.h)*1.6, Math.max(4, 16/s)*(0.85 + 0.3*rand()), 'rgba(255,215,120,0.85)', 'rgba(255,110,30,0.35)');
   }
+  drawParts(s);
   if (G.bolts.length){
-    G.bolts = G.bolts.filter(b => now - b.t < 220);
+    G.bolts = G.bolts.filter(b => now - b.t < (b.small ? 130 : BOLT_MS));
     for (const b of G.bolts){
-      const a = 1 - (now - b.t)/220;
-      for (const [w, col] of [[Math.max(1.2, 5/s), `rgba(80,200,255,${(0.35*a).toFixed(2)})`], [Math.max(0.35, 1.4/s), `rgba(225,250,255,${a.toFixed(2)})`]]){
+      const life = b.small ? 130 : BOLT_MS;
+      const a = Math.max(0, Math.min(1, 1 - (now - b.t)/life)) * (0.65 + 0.35*rand());
+      if (!b.sparked && !b.small){ b.sparked = true; for (let k=1; k<b.pts.length; k++) sparks(b.pts[k][0], b.pts[k][1]); }
+      // Zickzack einmal pro Bild neu würfeln: das Flackern macht den Blitz lebendig
+      const polys = [];
+      for (let k=1; k<b.pts.length; k++){
+        const poly = jagged(b.pts[k-1], b.pts[k], s);
+        polys.push(poly);
+        if (!b.small && rand() < 0.75){
+          const at = poly[1 + ((rand()*(poly.length-2))|0)];
+          const dir = Math.atan2(b.pts[k][1]-b.pts[k-1][1], b.pts[k][0]-b.pts[k-1][0]) + (rand() < 0.5 ? -1 : 1)*(0.5 + rand()*0.6);
+          const len = Math.max(2, 7/s) * (0.6 + rand());
+          polys.push(jagged(at, [at[0] + Math.cos(dir)*len, at[1] + Math.sin(dir)*len], s));
+        }
+      }
+      const k0 = b.small ? 0.5 : 1;
+      const strokes = [
+        [Math.max(3, 12/s)*k0,  `rgba(60,150,255,${(0.25*a).toFixed(3)})`],
+        [Math.max(1.1, 4.5/s)*k0, `rgba(120,215,255,${(0.6*a).toFixed(3)})`],
+        [Math.max(0.35, 1.8/s)*k0, `rgba(240,252,255,${a.toFixed(3)})`]
+      ];
+      for (const [w, col] of strokes){
         ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath();
-        for (let k=1; k<b.pts.length; k++) boltPath(b.pts[k-1][0], b.pts[k-1][1], b.pts[k][0], b.pts[k][1], 2.5);
+        polys.forEach(poly => traceLine(ctx, poly));
         ctx.stroke();
+      }
+      if (!b.small){
+        glow(b.pts[0][0], b.pts[0][1], Math.max(4, 16/s), `rgba(210,245,255,${(0.9*a).toFixed(3)})`, `rgba(70,170,255,${(0.35*a).toFixed(3)})`);
+        for (let k=1; k<b.pts.length; k++) glow(b.pts[k][0], b.pts[k][1], Math.max(2.5, 10/s), `rgba(220,248,255,${(0.8*a).toFixed(3)})`, `rgba(80,180,255,${(0.3*a).toFixed(3)})`);
       }
     }
   }
@@ -1726,7 +1886,7 @@ const HINTS = {
   pan: 'Ziehen verschiebt die Karte, zwei Finger zoomen.',
   outbreak: 'Tippe auf die Karte: Dort bricht das Virus aus.',
   wall: 'Mit einem Finger eine Mauer ziehen. Zwei Finger verschieben die Karte.',
-  soldier: 'Tippe, um einen Soldaten zu postieren. Reichweite 30 m.',
+  soldier: 'Tippe, um einen Soldaten zu postieren. Reichweite 45 m.',
   flame: 'Tippe, um einen Flammenturm zu bauen. 16 m Kegel, schießt über Mauern.',
   tesla: 'Tippe, um einen Teslaturm zu bauen. Blitz springt auf bis zu 5 Zombies.',
   erase: 'Tippe auf eine Mauer, einen Soldaten oder Turm, um ihn zu entfernen.'
@@ -1924,8 +2084,10 @@ async function loadReal(lat, lon, name){
   setStatus('Prüfe Zwischenspeicher …');
   let f = await cacheGet(key);
   if (!f){
-    const q = buildQuery(lat, lon, size);
-    const json = await fetchOverpass(q, i => setStatus(i ? `Lade Kartendaten (Ersatzserver ${i}) …` : 'Lade Straßen, Häuser und Gewässer von OpenStreetMap …'));
+    const json = await fetchArea(lat, lon, size, (part, total, srv) => {
+      const piece = total > 1 ? `, Teil ${part} von ${total}` : '';
+      setStatus(srv ? `Lade Kartendaten${piece} (Ersatzserver ${srv}) …` : `Lade Straßen, Häuser und Gewässer von OpenStreetMap${piece} …`);
+    });
     setStatus('Verarbeite Kartendaten …'); await nextFrame();
     f = parseOSM(json, lat, lon);
     if (!f.roads.length && !f.buildings.length) throw new Error('An diesem Ort gibt es keine Kartendaten. Wähle einen bewohnten Ort.');
@@ -1974,7 +2136,7 @@ function frame(now){
     for (let k=0; k<n; k++) step(sdt);
     G.time += gdt;
   }
-  render(now);
+  render(now, rdt);
   if (G && $('#start').hidden) updateHud(now);
   requestAnimationFrame(frame);
 }
