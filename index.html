@@ -216,6 +216,8 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
             <option value="600">600 × 600 m</option>
             <option value="1000" selected>1 × 1 km</option>
             <option value="1500">1,5 × 1,5 km</option>
+            <option value="3000">3 × 3 km</option>
+            <option value="10000">10 × 10 km</option>
           </select>
         </div>
         <div class="field">
@@ -223,6 +225,7 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
           <input id="pop" type="range" min="100" max="2000" step="50" value="500">
         </div>
       </div>
+      <p class="fine" id="areaNote" hidden></p>
       <button id="loadBtn" class="btn primary" type="button">Echten Ort laden</button>
       <div class="divider">oder ohne Internet</div>
       <div class="field">
@@ -547,12 +550,12 @@ async function fetchOverpass(query, onTry){
 }
 
 // Große Gebiete in Teilstücken laden und zusammensetzen.
-// 1,5 km wird gleich in 4 Stücke geteilt; scheitert ein Stück am Zeitlimit, wird es nochmal geviertelt.
+// Ab 1,5 km wird in Stücke von höchstens 1 km geteilt; scheitert eins am Zeitlimit, wird es nochmal geviertelt.
 function offsetLatLon(lat, lon, dx, dy){
   return { lat: lat - dy/110540, lon: lon + dx/(111320*Math.cos(lat*Math.PI/180)) };
 }
 async function fetchArea(lat, lon, size, onStatus){
-  const n = size > 1000 ? 2 : 1, st = size/n;
+  const n = size > 1000 ? Math.ceil(size/1000) : 1, st = size/n;
   const jobs = [];
   for (let ty=0; ty<n; ty++) for (let tx=0; tx<n; tx++)
     jobs.push({ dx: -size/2 + st*(tx+0.5), dy: -size/2 + st*(ty+0.5), s: st, depth: 0 });
@@ -1938,7 +1941,8 @@ const HB = 256, HMASK = HB - 1, HCELL = 4;
 function newHash(){ return { head:new Int32Array(HB*HB), next:new Int32Array(1024) }; }
 
 async function newGame(m, humans, say){
-  const f = m.f, size = m.size, batch = !!f.gen;
+  // Häuser gebündelt füllen: Zufallshäuser sind Rechtecke, Kachel-Häuser haben feste Umlaufrichtung (Innenhöfe bleiben frei)
+  const f = m.f, size = m.size, batch = !!f.gen || f.src === 'tiles';
   clearTiles();
   await say('Ordne Kartendaten …');
   const idx = indexFeatures(f, size);
@@ -1955,10 +1959,22 @@ async function newGame(m, humans, say){
   const distH = new Uint8Array(N), distZ = new Uint8Array(N);
   const order = { city:0, town:1, village:2 };
   const towns = m.towns || null;
+  // ohne Ortsliste (echte Karten, Stadtkarten): Hausmittelpunkte, damit Menschen dort wohnen, wo Häuser stehen
+  let bld = null;
+  if (!towns && f.buildings.length >= 50){
+    const out = [];
+    for (const b of f.buildings){
+      const r = b[0]; if (!r || !r.length) continue;
+      let x = 0, y = 0; for (const p of r){ x += p[0]; y += p[1]; }
+      x /= r.length; y /= r.length;
+      if (Math.abs(x) < size/2 && Math.abs(y) < size/2) out.push(x, y);
+    }
+    if (out.length >= 100) bld = Float32Array.from(out);
+  }
   G = {
     f, size, half:size/2, name:m.name, W, N, cell, mainCount, idx, batch, ov,
     labels: towns ? towns.slice().sort((a, b) => order[a.kind] - order[b.kind] || b.r - a.r) : null,
-    zones: towns ? towns.map(t => ({ x:t.x, y:t.y, r:t.r*0.85, w:t.r*t.r })) : null,
+    zones: towns ? towns.map(t => ({ x:t.x, y:t.y, r:t.r*0.85, w:t.r*t.r })) : null, bld,
     wallN: new Map(), towerN: new Map(),
     distH, distZ, q: new Int32Array(1 << 16),
     CW, NC, zc: new Uint8Array(NC), hc: new Uint8Array(NC), zN: new Uint8Array(NC), hN: new Uint8Array(NC),
@@ -2088,7 +2104,8 @@ function removeFromGroup(a){
 }
 function leaveGroup(a){ removeFromGroup(a); makeGroup(a); }
 
-// Zufällige begehbare Startzelle. In Regionen meist in einem Ort (nach Größe gewichtet).
+// Zufällige begehbare Startzelle. In Regionen meist in einem Ort (nach Größe gewichtet),
+// sonst meist in der Nähe eines Hauses.
 function spawnCell(useRoad){
   const g = G, W = g.W, cell = g.cell;
   for (let t = 0; t < 600; t++){
@@ -2098,6 +2115,11 @@ function spawnCell(useRoad){
       for (const q of g.zones){ r -= q.w; if (r <= 0){ z = q; break; } }
       const a = rand()*TAU, d = Math.sqrt(rand())*z.r;
       ix = Math.floor((z.x + Math.cos(a)*d + g.half)/CELL); iy = Math.floor((z.y + Math.sin(a)*d + g.half)/CELL);
+      if (ix < 0 || iy < 0 || ix >= W || iy >= W) continue;
+    } else if (g.bld && rand() < 0.85){
+      // in der Nähe eines zufälligen Hauses
+      const k = ((rand()*g.bld.length/2)|0)*2, a = rand()*TAU, d = 3 + rand()*25;
+      ix = Math.floor((g.bld[k] + Math.cos(a)*d + g.half)/CELL); iy = Math.floor((g.bld[k+1] + Math.sin(a)*d + g.half)/CELL);
       if (ix < 0 || iy < 0 || ix >= W || iy >= W) continue;
     } else { ix = (rand()*W)|0; iy = (rand()*W)|0; }
     const c = cell[iy*W + ix];
@@ -3077,6 +3099,10 @@ function render(now, rdt){
   const hs = [], zs = [], ss = [];
   for (const a of G.agents){ if (!a.alive || !vis(a)) continue; (a.t === H ? hs : a.t === Z ? zs : ss).push(a); }
   const towers = G.towers.filter(vis);
+  // dichte Menge (z. B. 30.000 Menschen auf 3 km): Punkte kleiner, damit Straßen und Häuser sichtbar bleiben
+  const crowd = hs.length + zs.length;
+  const ax = Math.max(0, Math.min(vx1 - 30, G.half) - Math.max(vx0 + 30, -G.half)), ay = Math.max(0, Math.min(vy1 - 30, G.half) - Math.max(vy0 + 30, -G.half));
+  const rd = crowd ? Math.min(r, Math.max(0.55, 0.32*Math.sqrt(ax*ay*s*s/crowd))/s) : r;
 
   // Reichweiten beim Bauen
   if (BUILD.has(tool) || tool === 'erase'){
@@ -3127,7 +3153,7 @@ function render(now, rdt){
     ctx.fill();
   }
   // Zombie-Schein, Brand
-  ctx.fillStyle = COL.zombieGlow; dots(zs, r*2.6, 5000); ctx.fill();
+  ctx.fillStyle = COL.zombieGlow; dots(zs, rd*2.6, 5000); ctx.fill();
   const burning = zs.filter(z => z.burn > 0);
   if (burning.length){
     ctx.fillStyle = `rgba(255,${100 + (rand()*60|0)},40,0.6)`; circles(burning, Math.max(r*1.9, 4.5/s)*(0.85 + rand()*0.3)); ctx.fill();
@@ -3135,15 +3161,15 @@ function render(now, rdt){
   // rennende Zombies: kurzer Schweif (nur nah genug dran)
   if (s > 0.6 && zs.length < 4000){
     const L = Math.max(2.4, 6/s);
-    ctx.strokeStyle = 'rgba(92,255,122,0.3)'; ctx.lineWidth = r*1.1; ctx.beginPath();
+    ctx.strokeStyle = 'rgba(92,255,122,0.3)'; ctx.lineWidth = rd*1.1; ctx.beginPath();
     for (const z of zs){ if (!z.run || z.stun > 0) continue; ctx.moveTo(z.x, z.y); ctx.lineTo(z.x - Math.cos(z.h)*L, z.y - Math.sin(z.h)*L); }
     ctx.stroke();
   }
   // Menschen, Zombies
-  ctx.fillStyle = COL.human; dots(hs, r); ctx.fill();
-  ctx.fillStyle = COL.zombie; dots(zs, r); ctx.fill();
+  ctx.fillStyle = COL.human; dots(hs, rd); ctx.fill();
+  ctx.fillStyle = COL.zombie; dots(zs, rd); ctx.fill();
   const stunned = zs.filter(z => z.stun > 0);
-  if (stunned.length){ ctx.strokeStyle = 'rgba(160,236,255,0.9)'; ctx.lineWidth = Math.max(0.3, 1.2/s); circles(stunned, r*1.5); ctx.stroke(); }
+  if (stunned.length){ ctx.strokeStyle = 'rgba(160,236,255,0.9)'; ctx.lineWidth = Math.max(0.3, 1.2/s); circles(stunned, rd*1.5); ctx.stroke(); }
   // Soldaten
   if (ss.length){
     const sr = r*1.45;
@@ -3557,8 +3583,27 @@ function backToStart(){
 }
 
 /* ---------- Startbildschirm ---------- */
-const popIn = $('#pop'), popOut = $('#popOut');
-popIn.addEventListener('input', () => { popOut.textContent = popIn.value; });
+const popIn = $('#pop'), popOut = $('#popOut'), areaIn = $('#area');
+// Menschen-Regler je Gebietsgröße: [min, max, Schritt, Vorgabe]
+const AREAS = {
+  600:   { pop:[100, 3000, 50, 500] },
+  1000:  { pop:[100, 5000, 50, 500] },
+  1500:  { pop:[100, 8000, 100, 800] },
+  3000:  { pop:[500, 30000, 500, 5000],   note:'3 × 3 km reicht für eine Kleinstadt samt Rand. Das Laden dauert ein paar Sekunden.' },
+  10000: { pop:[1000, 30000, 500, 15000], note:'10 × 10 km: Stadt mit Umland und Nachbarorten. Es werden etwa 50 Kartenkacheln geladen, das dauert eine Weile. Danach liegt die Karte im Zwischenspeicher.' }
+};
+function syncArea(){
+  const a = AREAS[areaIn.value] || AREAS[1000], [mn, mx, st, def] = a.pop;
+  popIn.min = mn; popIn.max = mx; popIn.step = st;
+  const saved = +lsGet('ausbruch-pop-' + areaIn.value);
+  popIn.value = saved >= mn && saved <= mx ? saved : def;
+  popOut.textContent = fmtNum(+popIn.value);
+  $('#areaNote').textContent = a.note || ''; $('#areaNote').hidden = !a.note;
+}
+areaIn.addEventListener('change', () => { lsSet('ausbruch-area', areaIn.value); syncArea(); });
+popIn.addEventListener('input', () => { popOut.textContent = fmtNum(+popIn.value); lsSet('ausbruch-pop-' + areaIn.value, +popIn.value); });
+{ const v = lsGet('ausbruch-area'); if (v && AREAS[v]) areaIn.value = String(v); }
+syncArea();
 function setStatus(msg, err){ const s = $('#status'); s.textContent = msg; s.classList.toggle('err', !!err); }
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 let busy = false;
@@ -3609,6 +3654,7 @@ async function loadReal(lat, lon, name){
       f = await fetchTilesArea(lat, lon, size, msg => say(msg, true));
       f.src = 'tiles';
     } catch(e){
+      if (size > 3000) throw new Error('Für 10 × 10 km braucht es den Kachelserver, und der ist gerade nicht erreichbar. Versuch es gleich noch einmal oder wähle höchstens 3 × 3 km.');
       await say('Kachelserver nicht erreichbar, versuche Overpass …'); await sleep(700);
       const json = await fetchArea(lat, lon, size, (part, total, srv) => {
         const piece = total > 1 ? `, Teil ${part} von ${total}` : '';
@@ -3655,9 +3701,9 @@ $('#diceBtn').addEventListener('click', () => { seedIn.value = newSeed(); });
 const RSIZES = {
   1000:  { pop:[100, 2000, 50, 500],      note:'Kleinstadt: eine Stadt füllt die ganze Karte.' },
   1500:  { pop:[100, 3000, 50, 800],      note:'Stadt: eine Stadt füllt die ganze Karte.' },
-  3000:  { pop:[500, 8000, 100, 2500],    note:'Großstadt: eine große Stadt füllt die ganze Karte.' },
-  6000:  { pop:[1000, 15000, 250, 4000],  note:'Landkreis: Großstadt, Städte und Dörfer, verbunden durch Landstraßen und Autobahn. Dazwischen Felder, Höfe, Wald, Seen und Flüsse.' },
-  10000: { pop:[2000, 20000, 500, 8000], note:'Riesig: Großstadt, ein paar Städte und gut zehn Dörfer auf 100 km². Der Aufbau dauert ein paar Sekunden.' },
+  3000:  { pop:[500, 30000, 500, 2500],    note:'Großstadt: eine große Stadt füllt die ganze Karte.' },
+  6000:  { pop:[1000, 30000, 500, 4000],  note:'Landkreis: Großstadt, Städte und Dörfer, verbunden durch Landstraßen und Autobahn. Dazwischen Felder, Höfe, Wald, Seen und Flüsse.' },
+  10000: { pop:[2000, 30000, 500, 8000], note:'Riesig: Großstadt, ein paar Städte und gut zehn Dörfer auf 100 km². Der Aufbau dauert ein paar Sekunden.' },
   16000: { pop:[4000, 30000, 500, 12000], note:'Gigantisch: zwei Großstädte, viele Städte und gut zwanzig Dörfer auf 256 km². Der Aufbau dauert etwas länger.' }
 };
 function syncSize(){
