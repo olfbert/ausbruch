@@ -27,7 +27,8 @@
   --flame:#ff7a2e;
   --tesla:#6fe3ff;
   --cure:#7fb2ff;
-  --air:#ffd166;
+  --air:#c9d4dc;
+  --nuke:#ffd23f;
   --wall:#d9c7a5;
   --alert:#ff5f52;
   --f-display:"Saira Stencil One","Arial Black",Impact,sans-serif;
@@ -159,9 +160,12 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
 [data-tool=strike],[data-strike=bomb]{--c:var(--alert)}
 [data-strike=air]{--c:var(--air)}
 [data-strike=cure]{--c:var(--cure)}
+[data-strike=nuke]{--c:var(--nuke)}
 .chip{position:relative}
 .chip .cd{position:absolute;left:8%;bottom:4px;height:3px;border-radius:2px;background:var(--c);opacity:.9;width:0}
 .chip.cool{opacity:.6}
+#tray2 .chip{flex-direction:column;gap:2px;height:50px;font-size:13px;padding:0 2px}
+#tray2 .chip span{max-width:100%;text-overflow:ellipsis}
 .sep{width:1px;background:var(--panel-line);margin:8px 2px;flex:none}
 
 /* ---------- Dialog ---------- */
@@ -334,6 +338,10 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3.5l5.5 5.5M17.7 6.2l-9.9 9.9-3.3.6.6-3.3 9.9-9.9M10.8 9.1l1.8 1.8M8.5 11.4l1.8 1.8M3.5 20.5l2.3-2.3"/></svg>
         <span>Gegenmittel</span><i class="cd"></i>
       </button>
+      <button class="chip" data-strike="nuke" type="button" aria-label="Taktische Atombombe">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="1.9"/><path d="M10.5 9.4 7.5 4.2A9 9 0 0 1 16.5 4.2L13.5 9.4A3 3 0 0 0 10.5 9.4zM15 12h6A9 9 0 0 1 16.5 19.8L13.5 14.6A3 3 0 0 0 15 12zM10.5 14.6 7.5 19.8A9 9 0 0 1 3 12h6A3 3 0 0 0 10.5 14.6z"/></svg>
+        <span>Atom</span><i class="cd"></i>
+      </button>
     </div>
     <div class="tools" role="toolbar" aria-label="Werkzeuge">
       <button class="tool" data-tool="pan" type="button" aria-label="Ansicht">
@@ -442,14 +450,14 @@ const H = 0, Z = 1, S = 2;          // Agententypen
 const BUILD = new Set(['wall', 'soldier', 'flame', 'tesla']);
 
 // Einsatz
-const STRIKE = new Set(['bomb', 'air', 'cure']);
-const BOMB_R = 18;                  // m Sprengradius der Bombe
-const AIR_R = 13, AIR_SPACING = 18, AIR_LEN = 140;   // Luftschlag: Radius je Bombe, Abstand, Länge bei einem Tipp
+const STRIKE = new Set(['bomb', 'air', 'cure', 'nuke']);
+const BOMB_R = 26;                  // m Sprengradius der Bombe
+const AIR_R = 18, AIR_SPACING = 22, AIR_LEN = 160;   // Luftschlag: Radius je Bombe, Abstand, Länge bei einem Tipp
 const AIR_V = 230, AIR_LEAD = 450;  // m/s Flugzeug, m Anflug vor dem ersten Ziel
 const CURE_R = 35;                  // m Gegenmittel-Wolke
 const CURE_DOSE = 3;                // so oft gibt ein frisch Geimpfter das Mittel weiter (jede Stufe eins weniger)
 const CURE_SPREAD = 0.25;           // pro Sekunde: Chance, einen Menschen nebenan zu impfen
-const COOL = { bomb:2, air:8, cure:10 };   // s Nachladen
+const COOL = { bomb:2, air:8, cure:10, nuke:30 };   // s Nachladen
 
 // Große Karten
 const CS = 64;                      // Zellen pro Block (128 m) für die Wegfelder
@@ -458,6 +466,7 @@ const FAR = 255;                    // Wegfeld: außer Reichweite
 // auf dem Handy unbelegt, bis dort wirklich Zombies und Menschen aufeinandertreffen.
 const dv = (dist, i) => (dist[i] || 256) - 1;
 const COLD_STEP = 1.4;              // s: Menschen weit weg von Zombies rechnen in großen Schritten (≤ 2 m)
+const ZCOLD_STEP = 0.6;             // s: dasselbe für Zombies ohne Menschen in der Nähe (≤ 2 m)
 const REGION_MIN = 6000;            // ab dieser Kantenlänge wird eine ganze Region gebaut
 
 // Zell-Bits im Raster G.cell (ein Byte pro 2-m-Zelle)
@@ -2065,17 +2074,23 @@ async function newGame(m, humans, say){
     CW, NC, zc: new Uint8Array(NC), hc: new Uint8Array(NC), zN: new Uint8Array(NC), hN: new Uint8Array(NC),
     tA: new Uint8Array(NC), tB: new Uint8Array(NC), rH: new Uint8Array(NC), rZ: new Uint8Array(NC), tch: new Uint8Array(NC),
     listH: [], listZ: [], fieldFlip: false, fieldSlow: false,
-    coldK: 1, coldAcc: new Float64Array(8), frameNo: 0, fieldNext: 0, sepTick: 0,
+    coldK: 1, coldAcc: new Float64Array(32), frameNo: 0, fieldNext: 0, sepTick: 0, hashAge: 0, hotL: [], coldL: [], classCam: 0, stepMs: 2,
     agents: [], walls: [], towers: [], corpses: [], fx: [], tracers: [], bolts: [], parts: [],
     time: 0, fieldT: 0, started: false, ended: false, kills: 0, maxZ: 0, humans0: 0, _lastKills: -1,
     ph: newHash(), zh: newHash(),
-    strikes: [], blasts: [], cureFx: [], smoke: [], scorch: [], shake: 0, cool: { bomb:0, air:0, cure:0 }, dead: 0, cured: 0, dirty: false,
+    strikes: [], blasts: [], cureFx: [], smoke: [], scorch: [], shake: 0, cool: { bomb:0, air:0, cure:0, nuke:0 }, dead: 0, cured: 0, dirty: false,
+    ruins: [], flat: [], flash: 0,
     SW, sEdge, scent: new Uint16Array(SW*SW), scentNext: new Uint16Array(SW*SW), sq: new Int32Array(1 << 14), sbfs: null, scentT: 0,
     HW, hz: new Uint16Array(HW*HW), hsx: new Float32Array(HW*HW), hsy: new Float32Array(HW*HW), hcx: new Float32Array(HW*HW), hcy: new Float32Array(HW*HW), hList: [], hordeT: 0
   };
   G.zoneW = G.zones ? G.zones.reduce((s, z) => s + z.w, 0) : 0;
   await say('Verteile Menschen …');
   spawnHumans(humans);
+  if (towns){
+    // Einwohner je Ort zählen (für Menü und Kontrolle)
+    for (const l of G.labels){ l.pop = 0; }
+    for (const a of G.agents){ for (const l of G.labels) if ((a.x - l.x)**2 + (a.y - l.y)**2 < l.r*l.r){ l.pop++; break; } }
+  }
   return G;
 }
 
@@ -2108,8 +2123,9 @@ function resetGame(){
   for (const n of G.hList){ G.hz[n] = 0; G.hsx[n] = G.hsy[n] = G.hcx[n] = G.hcy[n] = 0; }
   G.hList = [];
   G.time = 0; G.fieldT = 0; G.started = false; G.ended = false; G.kills = 0; G.maxZ = 0; G._lastKills = -1;
-  G.strikes = []; G.blasts = []; G.cureFx = []; G.smoke = []; G.scorch = []; G.shake = 0;
-  G.cool = { bomb:0, air:0, cure:0 }; G.dead = 0; G.cured = 0; G.dirty = false;
+  G.strikes = []; G.blasts = []; G.cureFx = []; G.smoke = []; G.scorch = []; G.shake = 0; G.hashAge = 0;
+  G.cool = { bomb:0, air:0, cure:0, nuke:0 }; G.dead = 0; G.cured = 0; G.dirty = false;
+  restoreBuildings(); G.ruins = []; G.flash = 0;
   syncCooldowns();
   spawnHumans(lastMap.humans);
   setTool('outbreak');
@@ -2165,7 +2181,7 @@ function cellsAround(x, y, r){
    ===================================================================== */
 function newHuman(x, y){
   return { t:H, x, y, h:rand()*TAU, turn:rand()*3, idle: rand()<0.25 ? rand()*8 : 0, alive:true,
-           g:null, rank:0, tc:0, joinT:rand()*2, stuck:0, px:x, py:y, cg:(rand()*8)|0 };
+           g:null, rank:0, tc:0, joinT:rand()*2, stuck:0, px:x, py:y, cg:(rand()*32)|0 };
 }
 function makeGroup(leader){
   const g = { leader, members:[leader], trail:[[leader.x, leader.y]], base:0, panic:0 };
@@ -2497,16 +2513,24 @@ function bestNeighbor(dist, i, wantMax){
    Horden: Zombies ohne Witterung ziehen zu den Zombies ringsum und laufen
    in deren Richtung. So entstehen Horden, die den Jägern unter ihnen folgen.
    ===================================================================== */
+function scentEdge(W, cell, SW, nx, ny){
+  const x0 = nx*SG, y0 = ny*SG, x1 = Math.min(W, x0 + SG), y1 = Math.min(W, y0 + SG);
+  let e = 0;
+  if (x1 < W && nx < SW - 1) for (let y = y0; y < y1; y++){ const i = y*W + x1 - 1; if (!((cell[i] | cell[i + 1]) & C_SOLID)){ e |= 1; break; } }
+  if (y1 < W && ny < SW - 1) for (let x = x0; x < x1; x++){ const i = (y1 - 1)*W + x; if (!((cell[i] | cell[i + W]) & C_SOLID)){ e |= 2; break; } }
+  return e;
+}
 function scentEdges(W, cell, SW){
   const E = new Uint8Array(SW*SW);
-  for (let ny = 0; ny < SW; ny++) for (let nx = 0; nx < SW; nx++){
-    const x0 = nx*SG, y0 = ny*SG, x1 = Math.min(W, x0 + SG), y1 = Math.min(W, y0 + SG);
-    let e = 0;
-    if (x1 < W && nx < SW - 1) for (let y = y0; y < y1; y++){ const i = y*W + x1 - 1; if (!((cell[i] | cell[i + 1]) & C_SOLID)){ e |= 1; break; } }
-    if (y1 < W && ny < SW - 1) for (let x = x0; x < x1; x++){ const i = (y1 - 1)*W + x; if (!((cell[i] | cell[i + W]) & C_SOLID)){ e |= 2; break; } }
-    E[ny*SW + nx] = e;
-  }
+  for (let ny = 0; ny < SW; ny++) for (let nx = 0; nx < SW; nx++) E[ny*SW + nx] = scentEdge(W, cell, SW, nx, ny);
   return E;
+}
+// nach Zerstörung: Durchgänge in einem Zellausschnitt neu bestimmen
+function scentEdgesBox([cx0, cy0, cx1, cy1]){
+  const g = G, SW = g.SW;
+  const n0x = Math.max(0, Math.floor(cx0/SG) - 1), n1x = Math.min(SW - 1, Math.floor(cx1/SG) + 1);
+  const n0y = Math.max(0, Math.floor(cy0/SG) - 1), n1y = Math.min(SW - 1, Math.floor(cy1/SG) + 1);
+  for (let ny = n0y; ny <= n1y; ny++) for (let nx = n0x; nx <= n1x; nx++) g.sEdge[ny*SW + nx] = scentEdge(g.W, g.cell, SW, nx, ny);
 }
 
 // Neuberechnung in Etappen über mehrere Bilder; erst wenn sie fertig ist, gilt das neue Feld
@@ -2580,7 +2604,7 @@ function zombify(a){
   a.wph = rand()*TAU; a.wf = 0.4 + rand()*1.1;   // Schlingern: Phase und Takt
   a.lat = rand()*2 - 1;                // seitlicher Versatz in der Horde
   a.h = rand()*TAU; a.turn = 0; a.idle = 0;
-  if (a.cg == null) a.cg = (rand()*8)|0;
+  if (a.cg == null) a.cg = (rand()*32)|0;
   return a;
 }
 // geradeaus in Richtung h (an Wänden entlanggleiten)
@@ -2653,7 +2677,7 @@ function roam(a, dt){
 // zweiten Teilschritt und schaut höchstens 6 Nachbarn an (in großen Horden sonst zu teuer).
 function zombieSpace(a, dt){
   const g = G, hh = g.zh, half = g.half, agents = g.agents, R = 1.1;
-  if (((a.cg | 0) & 1) !== g.sepTick) return;
+  if (dt > 0.3 || ((a.cg | 0) & 1) !== g.sepTick) return;     // ferne Zombies (große Schritte): kein Gedrängel
   const x0 = Math.floor((a.x - R + half)/HCELL), x1 = Math.floor((a.x + R + half)/HCELL);
   const y0 = Math.floor((a.y - R + half)/HCELL), y1 = Math.floor((a.y + R + half)/HCELL);
   let sx = 0, sy = 0, n = 0;
@@ -2882,10 +2906,15 @@ function nearestIn(hh, x, y, maxD, pred){
   return best;
 }
 
-function bites(){
-  const b2 = BITE_DIST*BITE_DIST, now = performance.now();
-  for (const z of G.agents){
+function bites(list){
+  const b2 = BITE_DIST*BITE_DIST, now = performance.now(), g = G, W = g.W, half = g.half, distH = g.distH;
+  for (const z of list){
     if (!z.alive || z.t !== Z || z.stun > 0) continue;
+    // nur Zombies, die laut Wegfeld höchstens 10 m vor einem Menschen stehen
+    const ix = Math.floor((z.x + half)/CELL), iy = Math.floor((z.y + half)/CELL);
+    if (ix < 0 || iy < 0 || ix >= W || iy >= W) continue;
+    const dd = distH[iy*W + ix];
+    if (dd === 0 || dd > 6) continue;
     forEachIn(G.ph, z.x, z.y, BITE_DIST, p => {
       if (!p.alive || p.t === Z || z.t !== Z) return;
       const dx = p.x - z.x, dy = p.y - z.y;
@@ -2904,35 +2933,62 @@ function bites(){
   }
 }
 
-// Menschen weit weg von Zombies (und nicht groß im Bild) werden seltener gerechnet:
-// coldDt > 0 nur im ersten Teilschritt eines Bildes, und nur für Gruppe coldSel von G.coldK.
-function step(dt, coldDt, coldSel){
-  const g = G;
-  buildHash(g.ph, a => a.t !== Z);
-  buildHash(g.zh, a => a.t === Z);
-  g.sepTick = g.sepTick ? 0 : 1;
-  const hot = g.started ? g.zN : null, CW = g.CW, cs = CELL*CS, half = g.half, K = g.coldK;
-  // beim Hineinzoomen laufen alle sichtbaren Menschen flüssig
-  const vs = cam.s >= 0.8, vx0 = -cam.x/cam.s - 10, vy0 = -cam.y/cam.s - 10, vx1 = (VW - cam.x)/cam.s + 10, vy1 = (VH - cam.y)/cam.s + 10;
+// Genau gerechnet wird nur, wo etwas passiert: Menschen bis 52 m vor einem Zombie, Zombies bis
+// 24 m vor einem Menschen, und beim Hineinzoomen alles im Bild. Der Rest ist „fern“: Jedes Bild
+// ist eine andere von G.coldK Gruppen dran und holt die Zeit in großen Schritten nach
+// (coldDt für Menschen, zDt für Zombies, nur im ersten Teilschritt eines Bildes).
+// Wer ist „nah“ (genau rechnen), wer „fern“ (in Gruppen, große Schritte)? Wird nur alle 0,5 s Spielzeit
+// neu einsortiert, zusammen mit dem Nachbar-Gitter. So läuft ein Teilschritt nicht über alle 100.000.
+function classify(){
+  const g = G, W = g.W, half = g.half, K = g.coldK, distZ = g.distZ, distH = g.distH, st = g.started;
+  const hot = g.hotL; hot.length = 0;
+  if (g.coldL.length !== K) g.coldL = Array.from({ length:K }, () => []);
+  for (const l of g.coldL) l.length = 0;
+  const vs = cam.s >= 0.8, m = 60/cam.s, vx0 = -cam.x/cam.s - m, vy0 = -cam.y/cam.s - m, vx1 = (VW - cam.x)/cam.s + m, vy1 = (VH - cam.y)/cam.s + m;
+  g.classCam = cam.x + cam.y*7 + cam.s*1e5;
   for (const a of g.agents){
     if (!a.alive) continue;
-    if (a.t === H){
-      let near = vs && a.x > vx0 && a.x < vx1 && a.y > vy0 && a.y < vy1;
-      if (!near && hot){
-        const cx = Math.floor((a.x + half)/cs), cy = Math.floor((a.y + half)/cs);
-        near = cx >= 0 && cy >= 0 && cx < CW && cy < CW && hot[cy*CW + cx] === 1;
+    const t = a.t;
+    let near = t === S || (vs && a.x > vx0 && a.x < vx1 && a.y > vy0 && a.y < vy1);
+    if (!near && st){
+      const ix = Math.floor((a.x + half)/CELL), iy = Math.floor((a.y + half)/CELL);
+      if (ix >= 0 && iy >= 0 && ix < W && iy < W){
+        const i = iy*W + ix;
+        // Menschen: Zombie bis 52 m; Zombies: Mensch bis 24 m (weiter weg laufen sie dem Wegfeld in großen Schritten nach)
+        near = t === H ? distZ[i] !== 0 : ((distH[i] !== 0 && distH[i] <= 13) || a.burn > 0 || a.stun > 0);
       }
-      if (near) updHuman(a, dt);
-      else if (coldDt > 0 && a.cg % K === coldSel) for (let t = coldDt; t > 1e-6; t -= COLD_STEP) updHuman(a, Math.min(COLD_STEP, t));
     }
-    else if (a.t === Z) updZombie(a, dt);
-    else updSoldier(a, dt);
+    if (near) hot.push(a); else g.coldL[(a.cg | 0) % K].push(a);
+  }
+}
+function step(dt, coldDt, coldSel, zDt){
+  const g = G;
+  // Nachbar-Gitter und Einteilung höchstens alle 0,5 s Spielzeit neu (bei 100.000 Leuten spürbar teuer),
+  // sofort, wenn die Ansicht sich deutlich bewegt hat
+  g.hashAge -= dt;
+  if (g.hashAge <= 0 || Math.abs(g.classCam - (cam.x + cam.y*7 + cam.s*1e5)) > 40){
+    buildHash(g.ph, a => a.t !== Z); buildHash(g.zh, a => a.t === Z); classify(); g.hashAge = 0.5;
+  }
+  g.sepTick = g.sepTick ? 0 : 1;
+  for (const a of g.hotL){
+    if (!a.alive) continue;
+    if (a.t === H) updHuman(a, dt); else if (a.t === Z) updZombie(a, dt); else updSoldier(a, dt);
+  }
+  if (coldDt > 0 || zDt > 0){
+    for (const a of g.coldL[coldSel] || []){
+      if (!a.alive) continue;
+      if (a.t === H){ for (let u = coldDt; u > 1e-6; u -= COLD_STEP) updHuman(a, Math.min(COLD_STEP, u)); }
+      else if (a.t === Z){ for (let u = zDt; u > 1e-6 && a.alive; u -= ZCOLD_STEP) updZombie(a, Math.min(ZCOLD_STEP, u)); }
+    }
   }
   for (const t of g.towers){ if (t.type === 'flame') updFlame(t, dt); else updTesla(t, dt); }
-  bites();
+  bites(g.hotL);
   if (g.kills !== g._lastKills || g.dirty){
-    g.agents = g.agents.filter(a => a.alive);
+    const A = g.agents; let w = 0;
+    for (let i = 0; i < A.length; i++) if (A[i].alive) A[w++] = A[i];
+    A.length = w;
     g._lastKills = g.kills; g.dirty = false;
+    g.hashAge = 0;                       // die Liste hat sich verschoben: Gitter neu
   }
 }
 
@@ -2953,7 +3009,7 @@ function placeOutbreak(wx, wy){
     G.agents.push(zombify({ x, y, alive:true }));
   }
   G.fx.push({ x:cx, y:cy, t:now, big:true });
-  G.started = true; G.ended = false;
+  G.started = true; G.ended = false; G.hashAge = 0;
   G.fieldT = 0;
   setTool('pan');
   flashHint('Ausbruch! Unter „Bauen“ findest du Mauern, Soldaten und Türme.');
@@ -2964,6 +3020,7 @@ function placeSoldier(wx, wy){
   if (i < 0){ flashHint('Soldaten brauchen begehbaren Boden.'); return; }
   const [cx, cy] = cellCenter(i);
   G.agents.push({ t:S, x:cx, y:cy, h:-Math.PI/2, cd:0, alive:true });
+  G.hashAge = 0;
   G.fieldT = 0;
 }
 
@@ -3046,7 +3103,7 @@ function segDist(px, py, a, b){
    weiter: Ein Zombie, der sie berührt, wird geheilt, und sie impfen Menschen
    in ihrer Nähe. Jede Weitergabe schwächt die Dosis um eins, bis die Kette endet.
    ===================================================================== */
-const STRIKE_NAME = { bomb:'Bombe', air:'Luftschlag', cure:'Gegenmittel' };
+const STRIKE_NAME = { bomb:'Bombe', air:'Luftschlag', cure:'Gegenmittel', nuke:'Atombombe' };
 
 function strikeReady(kind){
   const c = G.cool[kind];
@@ -3089,6 +3146,10 @@ function updStrikes(rdt){
   for (const s of G.strikes){
     s.t += rdt;
     if (s.kind === 'air'){ for (const b of s.bombs) if (!b.done && s.t >= b.at){ b.done = true; explode(b.x, b.y, AIR_R, 0.7); } }
+    else if (s.kind === 'nuke'){
+      if (!s.done && s.t >= s.at){ s.done = true; nukeDetonate(s); }
+      if (s.done) nukeUpdate(s, s.t - s.at);
+    }
     else if (!s.done && s.t >= s.at){
       s.done = true;
       if (s.kind === 'bomb') explode(s.x, s.y, BOMB_R, 1); else applyCure(s.x, s.y);
@@ -3124,7 +3185,7 @@ function explode(x, y, R, power){
   G.blasts.push({ x, y, R, t:now });
   G.scorch.push({ x, y, r:R*0.8 });
   if (G.scorch.length > 150) G.scorch.shift();
-  for (let k = 0; k < 30; k++){
+  for (let k = 0; k < 44; k++){
     const a = rand()*TAU, sp = R*(1.5 + rand()*3);
     emit({ k:0, x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, age:0, life:0.3 + rand()*0.35, s0:R*0.08, s1:R*(0.18 + rand()*0.12), drag:3 });
   }
@@ -3135,7 +3196,7 @@ function explode(x, y, R, power){
   }
   // Erschütterung, wenn die Explosion im Bild ist
   const sx = cam.x + x*cam.s, sy = cam.y + y*cam.s;
-  if (sx > -100 && sx < VW + 100 && sy > -100 && sy < VH + 100) G.shake = Math.min(14, G.shake + 5*power*Math.min(1.5, Math.max(0.4, cam.s)));
+  if (sx > -100 && sx < VW + 100 && sy > -100 && sy < VH + 100) G.shake = Math.min(18, G.shake + 6*power*Math.min(1.5, Math.max(0.4, cam.s)));
 }
 
 function vaccinate(a, dose){ a.imm = 1; a.dose = Math.max(a.dose || 0, dose); }
@@ -3143,7 +3204,7 @@ function vaccinate(a, dose){ a.imm = 1; a.dose = Math.max(a.dose || 0, dose); }
 // Zombie wird wieder Mensch: geimpft und mit einer (schwächeren) Dosis zum Weitergeben
 function cureZombie(z, dose){
   Object.assign(z, { t:H, h:rand()*TAU, turn:rand()*3, idle:0, g:null, rank:0, tc:0, joinT:rand()*2, stuck:0, px:z.x, py:z.y, run:false, burn:0, stun:0 });
-  if (z.cg == null) z.cg = (rand()*8)|0;
+  if (z.cg == null) z.cg = (rand()*32)|0;
   makeGroup(z);
   vaccinate(z, dose);
   G.cured++;
@@ -3276,6 +3337,7 @@ function drawStrikes(now, s, phase){
   // phase 'top': Zielkreuze, fallende Bomben, Flugzeug (immer gleich groß auf dem Bildschirm)
   const px = 1/s;
   for (const st of G.strikes){
+    if (st.kind === 'nuke') continue;          // die zeichnet drawNukes
     if (st.kind === 'bomb' || st.kind === 'cure'){
       if (st.done) continue;
       const p = st.t/st.at, R = st.kind === 'bomb' ? BOMB_R : CURE_R;
@@ -3320,11 +3382,219 @@ function updSmoke(rdt){
 }
 
 /* =====================================================================
+   10c) TAKTISCHE ATOMBOMBE (10 kt, Explosion knapp über dem Boden)
+   Wirkradien nach öffentlich bekannten Faustwerten (wie bei NUKEMAP):
+   Feuerball 170 m, schwere Druckschäden (20 psi) 470 m, mittlere (5 psi)
+   1 km, Verbrennungen 3. Grades 1,3 km, leichte Druckschäden (1 psi) 2,6 km.
+   Die Druckwelle läuft in echter Zeit nach außen: nach 2 s bei 1 km, nach
+   gut 6 s bei 2,6 km. Häuser im Bereich schwerer Schäden werden zu Trümmern.
+   ===================================================================== */
+const NUKE = { fire:170, heavy:470, mod:1000, burn:1300, light:2600, delay:3, life:70 };
+const NUKE_RINGS = [
+  ['fire', 'Feuerball', 'rgba(255,214,120,0.9)'],
+  ['heavy', 'schwere Zerstörung', 'rgba(255,120,60,0.85)'],
+  ['mod', 'Gebäude stark beschädigt', 'rgba(255,170,90,0.7)'],
+  ['burn', 'Verbrennungen 3. Grades', 'rgba(255,200,120,0.6)'],
+  ['light', 'Fenster bersten', 'rgba(200,210,220,0.5)']
+];
+const shockR = t => 2600*Math.pow(Math.max(0, t)/6.5, 0.78);          // Radius der Druckwelle nach t Sekunden
+const shockT = d => 6.5*Math.pow(d/2600, 1/0.78);                     // wann sie in d Metern ankommt
+
+function dropNuke(x, y){
+  if (!strikeReady('nuke')) return;
+  G.strikes.push({ kind:'nuke', x, y, t:0, at:NUKE.delay, end:NUKE.delay + NUKE.life });
+  flashHint('Atombombe fällt. Zündung in 3 Sekunden.');
+}
+
+function nukeDetonate(s){
+  const N = NUKE, fate = [];
+  for (const a of G.agents){
+    if (!a.alive) continue;
+    const d = Math.hypot(a.x - s.x, a.y - s.y);
+    if (d > N.light) continue;
+    let p, at;
+    if (d <= N.fire){ p = 1; at = 0; }
+    else if (d <= N.heavy){ p = 1; at = shockT(d); }
+    else if (d <= N.mod){ p = 0.9 - 0.4*(d - N.heavy)/(N.mod - N.heavy); at = shockT(d); }
+    else if (d <= N.burn){ p = 0.5 - 0.35*(d - N.mod)/(N.burn - N.mod); at = 0.2 + rand()*0.4; }   // Hitzestrahlung
+    else { p = 0.03; at = shockT(d); }
+    if (rand() < p) fate.push({ a, at });
+    else if (a.t === H && a.g) a.g.panic = PANIC_TIME*3;
+    else if (a.t === Z) a.stun = Math.max(a.stun || 0, 2 + rand()*2);
+  }
+  fate.sort((p, q) => p.at - q.at);
+  s.fate = fate; s.fi = 0;
+  // was gebaut ist, hält das nicht aus
+  for (const w of G.walls.slice()) if (w.pts.some(p => Math.hypot(p[0] - s.x, p[1] - s.y) < N.heavy)) removeWall(w);
+  for (const t of G.towers.slice()) if (Math.hypot(t.x - s.x, t.y - s.y) < N.heavy) removeTower(t);
+  flattenBuildings(s.x, s.y, N.heavy);
+  G.ruins.push({ x:s.x, y:s.y });
+  G.flash = performance.now();
+  G.shake = 34;
+}
+
+function nukeUpdate(s, t){
+  const f = s.fate;
+  while (s.fi < f.length && f[s.fi].at <= t){
+    const a = f[s.fi++].a;
+    if (!a.alive) continue;
+    if (a.t === Z) hurt(a, 1e5, 'blast'); else killPerson(a);
+  }
+  // Brände im Trümmerfeld
+  if (t < 30 && rand() < 0.8){
+    const a = rand()*TAU, d = Math.sqrt(rand())*NUKE.heavy;
+    emit({ k:1, x: s.x + Math.cos(a)*d, y: s.y + Math.sin(a)*d, vx:(rand() - 0.5)*3, vy:-2 - rand()*4, age:0, life:0.6 + rand()*0.8, s0:2.5, s1:0.6, drag:0.6 });
+  }
+}
+
+// Häuser im Umkreis werden zu begehbaren Trümmern (bei „Neu starten“ stehen sie wieder)
+function flattenBuildings(x, y, R){
+  const g = G, W = g.W, cell = g.cell, rc = Math.ceil(R/CELL);
+  const cx = Math.floor((x + g.half)/CELL), cy = Math.floor((y + g.half)/CELL), idx = [], old = [];
+  for (let dy = -rc; dy <= rc; dy++){
+    const iy = cy + dy;
+    if (iy < 1 || iy >= W - 1) continue;
+    for (let dx = -rc; dx <= rc; dx++){
+      const ix = cx + dx;
+      if (ix < 1 || ix >= W - 1 || dx*dx + dy*dy > rc*rc) continue;
+      const i = iy*W + ix, c = cell[i];
+      if (!(c & C_OPQ)) continue;
+      idx.push(i); old.push(c);
+      cell[i] = c & ~(C_OPQ | C_SOLID);
+      refreshBlock(i);
+    }
+  }
+  const box = [cx - rc, cy - rc, cx + rc, cy + rc];
+  g.flat.push({ idx:Int32Array.from(idx), old:Uint8Array.from(old), box });
+  scentEdgesBox(box);
+}
+function restoreBuildings(){
+  for (let k = G.flat.length - 1; k >= 0; k--){
+    const f = G.flat[k];
+    for (let j = 0; j < f.idx.length; j++){ G.cell[f.idx[j]] = f.old[j]; refreshBlock(f.idx[j]); }
+    scentEdgesBox(f.box);
+  }
+  G.flat = [];
+}
+
+// Zeichnen: Trümmerfeld (Boden), Pilzwolke (über allem), Feuerball und Druckwelle (leuchtend), Zielkreise
+function drawNukes(now, s, phase){
+  if (phase === 'ground'){
+    for (const r of G.ruins){
+      ctx.fillStyle = 'rgba(14,9,6,0.45)'; ctx.beginPath(); ctx.arc(r.x, r.y, NUKE.burn, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(34,27,22,0.9)'; ctx.beginPath(); ctx.arc(r.x, r.y, NUKE.heavy, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(10,8,7,0.92)'; ctx.beginPath(); ctx.arc(r.x, r.y, NUKE.fire*0.55, 0, TAU); ctx.fill();
+    }
+    return;
+  }
+  for (const st of G.strikes){
+    if (st.kind !== 'nuke') continue;
+    const t = st.t - st.at;
+    if (phase === 'top' && t < 0){
+      // Zielkreise mit Beschriftung und Countdown
+      ctx.lineWidth = 1.5/s; ctx.setLineDash([8/s, 5/s]);
+      for (const [k, , col] of NUKE_RINGS){ ctx.strokeStyle = col; ctx.beginPath(); ctx.arc(st.x, st.y, NUKE[k], 0, TAU); ctx.stroke(); }
+      ctx.setLineDash([]);
+      ctx.save(); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.lineJoin = 'round';
+      ctx.font = `600 12px ${LABEL_FONT}`;
+      const sx = cam.x + st.x*cam.s, sy = cam.y + st.y*cam.s;
+      for (const [k, name, col] of NUKE_RINGS){
+        const ry = sy - NUKE[k]*cam.s - 3;
+        if (NUKE[k]*cam.s < 18 || ry < 8 || ry > VH) continue;
+        const txt = `${name} · ${NUKE[k] >= 1000 ? String(NUKE[k]/1000).replace('.', ',') + ' km' : NUKE[k] + ' m'}`;
+        ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(7,10,13,0.85)'; ctx.strokeText(txt, sx, ry);
+        ctx.fillStyle = col; ctx.fillText(txt, sx, ry);
+      }
+      ctx.font = `700 34px ${LABEL_FONT}`; ctx.textBaseline = 'middle';
+      const n = String(Math.ceil(-t));
+      ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(7,10,13,0.85)'; ctx.strokeText(n, sx, sy);
+      ctx.fillStyle = '#ffd23f'; ctx.fillText(n, sx, sy);
+      ctx.restore();
+      continue;
+    }
+    if (t < 0) continue;
+    if (phase === 'cloud'){
+      // Pilzwolke von oben: wächst über Minuten, wird langsam durchsichtig
+      const rc = 1150*(1 - Math.exp(-t/8)) + NUKE.fire*0.6, a = t < 35 ? 0.6 : 0.6*Math.max(0, 1 - (t - 35)/(NUKE.life - 35));
+      if (a <= 0) continue;
+      const hot = Math.max(0, 1 - t/14);    // anfangs glüht die Wolke von unten
+      const g = ctx.createRadialGradient(st.x, st.y, 0, st.x, st.y, rc);
+      g.addColorStop(0, `rgba(${Math.round(150 + 90*hot)},${Math.round(128 + 30*hot)},${Math.round(112 - 40*hot)},${a.toFixed(3)})`);
+      g.addColorStop(0.5, `rgba(128,116,108,${(a*0.85).toFixed(3)})`);
+      g.addColorStop(0.85, `rgba(96,92,92,${(a*0.5).toFixed(3)})`);
+      g.addColorStop(1, 'rgba(80,80,84,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(st.x, st.y, rc, 0, TAU); ctx.fill();
+      // Wulst: Wolkenballen am Rand, drehen sich langsam
+      ctx.fillStyle = `rgba(140,130,124,${(a*0.35).toFixed(3)})`; ctx.beginPath();
+      for (let k = 0; k < 14; k++){
+        const ang = k/14*TAU + t*0.01 + (st.x % 1), bx = st.x + Math.cos(ang)*rc*0.68, by = st.y + Math.sin(ang)*rc*0.68, br = rc*(0.2 + 0.06*Math.sin(k*2.3));
+        ctx.moveTo(bx + br, by); ctx.arc(bx, by, br, 0, TAU);
+      }
+      ctx.fill();
+    } else if (phase === 'glow'){
+      // Feuerball: weiß-gelb, dann orange und rot, nach etwa 10 s verglüht
+      if (t < 10){
+        const k = Math.min(1, t/0.35), rf = NUKE.fire*(0.55 + 0.45*k)*(1 + 0.04*t), fade = Math.min(1, (10 - t)/6);
+        const gg = Math.max(70, Math.round(250 - 22*t)), bb = Math.max(20, Math.round(220 - 40*t));
+        const g = ctx.createRadialGradient(st.x, st.y, 0, st.x, st.y, rf*1.35);
+        g.addColorStop(0, `rgba(255,255,${Math.max(120, 250 - 30*t)},${fade.toFixed(3)})`);
+        g.addColorStop(0.45, `rgba(255,${gg},${bb},${(0.95*fade).toFixed(3)})`);
+        g.addColorStop(0.74, `rgba(255,${Math.round(gg*0.6)},20,${(0.8*fade).toFixed(3)})`);
+        g.addColorStop(1, 'rgba(200,40,10,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(st.x, st.y, rf*1.35, 0, TAU); ctx.fill();
+      }
+      // Hitzestrahlung: kurzer, weiter Schein
+      if (t < 1.6) glow(st.x, st.y, NUKE.burn, `rgba(255,200,140,${(0.35*(1 - t/1.6)).toFixed(3)})`, `rgba(255,140,60,${(0.18*(1 - t/1.6)).toFixed(3)})`);
+      // Druckwelle
+      if (t < 7){
+        const r = shockR(t), a = 1 - t/7;
+        ctx.strokeStyle = `rgba(255,244,228,${(0.75*a).toFixed(3)})`; ctx.lineWidth = Math.max(3/s, 40*a);
+        ctx.beginPath(); ctx.arc(st.x, st.y, r, 0, TAU); ctx.stroke();
+        ctx.strokeStyle = `rgba(190,170,150,${(0.25*a).toFixed(3)})`; ctx.lineWidth = Math.max(6/s, 160*a);
+        ctx.beginPath(); ctx.arc(st.x, st.y, Math.max(0, r - 90*a), 0, TAU); ctx.stroke();
+      }
+    }
+  }
+}
+// greller Lichtblitz über dem ganzen Bild
+function drawFlash(now){
+  if (!G.flash) return;
+  const a = 1 - (now - G.flash)/700;
+  if (a <= 0){ G.flash = 0; return; }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = `rgba(255,252,240,${(0.92*a).toFixed(3)})`; ctx.fillRect(0, 0, VW, VH);
+}
+
+/* =====================================================================
    11) ZEICHNEN
    ===================================================================== */
 function circles(list, rad){
   ctx.beginPath();
   for (const a of list){ ctx.moveTo(a.x + rad, a.y); ctx.arc(a.x, a.y, rad, 0, TAU); }
+}
+// Punkte als Pixel: [Liste, Farbe als 0xAABBGGRR, Kantenlänge in Gerätepixeln]
+const PD = { c:null, g:null, img:null, u:null, w:0, h:0 };
+function pixelDots(lists, s){
+  const w = cv.width, h = cv.height;
+  if (PD.w !== w || PD.h !== h){
+    PD.c = makeCanvas(w, h); PD.g = PD.c.getContext('2d');
+    PD.img = PD.g.createImageData(w, h); PD.u = new Uint32Array(PD.img.data.buffer); PD.w = w; PD.h = h;
+  }
+  const u = PD.u, k = s*dpr, m = ctx.getTransform(), ox = m.e, oy = m.f;
+  u.fill(0);
+  for (const [arr, col, sz] of lists){
+    for (let j = 0; j < arr.length; j++){
+      const a = arr[j], x = (ox + a.x*k) | 0, y = (oy + a.y*k) | 0;
+      if (x < 0 || y < 0 || x > w - sz || y > h - sz) continue;
+      let i = y*w + x;
+      u[i] = col; u[i + 1] = col; if (sz > 2) u[i + 2] = col;
+      i += w; u[i] = col; u[i + 1] = col; if (sz > 2) u[i + 2] = col;
+      if (sz > 2){ i += w; u[i] = col; u[i + 1] = col; u[i + 2] = col; }
+    }
+  }
+  PD.g.putImageData(PD.img, 0, 0);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(PD.c, 0, 0); ctx.restore();
 }
 // Punkte: sind es sehr viele kleine, werden Quadrate gezeichnet (viel schneller als Kreise)
 function dots(list, rad, many){
@@ -3438,13 +3708,14 @@ function render(now, rdt){
   const s = cam.s;
   // Erschütterung nach Explosionen
   const sh = G.shake > 0.3 ? G.shake : 0;
-  G.shake *= Math.exp(-rdt*7);
+  G.shake *= Math.exp(-rdt*(G.shake > 16 ? 2.5 : 7));
   ctx.setTransform(dpr*s, 0, 0, dpr*s, dpr*(cam.x + (rand() - 0.5)*sh), dpr*(cam.y + (rand() - 0.5)*sh));
   ctx.imageSmoothingEnabled = true;
   drawBase();
   ctx.strokeStyle = COL.frame; ctx.lineWidth = 1.5/s;
   ctx.strokeRect(-G.half, -G.half, G.size, G.size);
   drawStrikes(now, s, 'ground');
+  drawNukes(now, s, 'ground');
 
   if (running && rdt > 0){ emitFx(rdt, now); updParts(rdt); }
 
@@ -3529,8 +3800,11 @@ function render(now, rdt){
     }
     ctx.fill();
   }
+  // Sehr viele kleine Punkte (weit herausgezoomt, Zehntausende Menschen): direkt als Pixel setzen,
+  // das ist viel schneller als Zehntausende Formen
+  const pix = crowd > 6000 && rd*s < 1.6;
   // Zombie-Schein, Brand
-  ctx.fillStyle = COL.zombieGlow; dots(zs, rd*2.6, 5000); ctx.fill();
+  if (!pix){ ctx.fillStyle = COL.zombieGlow; dots(zs, rd*2.6, 5000); ctx.fill(); }
   const burning = zs.filter(z => z.burn > 0);
   if (burning.length){
     ctx.fillStyle = `rgba(255,${100 + (rand()*60|0)},40,0.6)`; circles(burning, Math.max(r*1.9, 4.5/s)*(0.85 + rand()*0.3)); ctx.fill();
@@ -3545,10 +3819,13 @@ function render(now, rdt){
   // Menschen (Geimpfte blau, mit Dosis leuchtend), Zombies
   const hn = [], hi = [], hc = [];
   for (const a of hs){ if (a.imm){ hi.push(a); if (a.dose > 0) hc.push(a); } else hn.push(a); }
-  if (hc.length){ ctx.fillStyle = COL.immuneGlow; dots(hc, rd*2.4, 5000); ctx.fill(); }
-  ctx.fillStyle = COL.human; dots(hn, rd); ctx.fill();
-  if (hi.length){ ctx.fillStyle = COL.immune; dots(hi, rd); ctx.fill(); }
-  ctx.fillStyle = COL.zombie; dots(zs, rd); ctx.fill();
+  if (pix) pixelDots([[hn, 0xFFF8F6F4, 2], [hi, 0xFFFFB27F, 2], [zs, 0xFF7AFF5C, 3]], s);
+  else {
+    if (hc.length){ ctx.fillStyle = COL.immuneGlow; dots(hc, rd*2.4, 5000); ctx.fill(); }
+    ctx.fillStyle = COL.human; dots(hn, rd); ctx.fill();
+    if (hi.length){ ctx.fillStyle = COL.immune; dots(hi, rd); ctx.fill(); }
+    ctx.fillStyle = COL.zombie; dots(zs, rd); ctx.fill();
+  }
   const stunned = zs.filter(z => z.stun > 0);
   if (stunned.length){ ctx.strokeStyle = 'rgba(160,236,255,0.9)'; ctx.lineWidth = Math.max(0.3, 1.2/s); circles(stunned, rd*1.5); ctx.stroke(); }
   // Soldaten
@@ -3561,12 +3838,14 @@ function render(now, rdt){
     ctx.stroke();
   }
 
-  // Rauch von Explosionen
+  // Rauch von Explosionen, Pilzwolken
   drawStrikes(now, s, 'smoke');
+  drawNukes(now, s, 'cloud');
 
   // Leuchtende Effekte: Flammen, Blitze, Schüsse (additiv gemischt, damit sie glühen)
   ctx.globalCompositeOperation = 'lighter';
   drawStrikes(now, s, 'glow');
+  drawNukes(now, s, 'glow');
   for (const t of towers){
     if (t.type !== 'flame' || !t.firing) continue;
     // Kegel als weicher Grundschein
@@ -3639,7 +3918,9 @@ function render(now, rdt){
     }
   }
   drawStrikes(now, s, 'top');
+  drawNukes(now, s, 'top');
   drawLabels();
+  drawFlash(now);
 }
 
 /* =====================================================================
@@ -3767,6 +4048,7 @@ function tapAt(sx, sy){
   else if (tool === 'erase') eraseAt(wx, wy);
   else if (tool === 'bomb') dropBomb(wx, wy);
   else if (tool === 'cure') dropCure(wx, wy);
+  else if (tool === 'nuke') dropNuke(wx, wy);
 }
 
 // Linie glätten: Punkte näher als 2 m zusammenfassen
@@ -3790,11 +4072,12 @@ const HINTS = {
   flame: 'Tippe, um einen Flammenturm zu bauen. 16 m Kegel, schießt über Mauern.',
   tesla: 'Tippe, um einen Teslaturm zu bauen. Blitz springt auf bis zu 5 Zombies.',
   erase: 'Tippe auf eine Mauer, einen Soldaten oder Turm, um ihn zu entfernen.',
-  bomb: 'Tippe: Bombe mit 18 m Sprengradius. Sie trifft auch Menschen.',
-  air: 'Zieh die Anflugslinie oder tippe: Bombenteppich auf 140 m.',
-  cure: 'Tippe: Gegenmittel heilt Zombies und impft Menschen (35 m). Geimpfte geben es weiter.'
+  bomb: 'Tippe: Bombe mit 26 m Sprengradius. Sie trifft auch Menschen.',
+  air: 'Zieh die Anflugslinie oder tippe: Bombenteppich auf 160 m.',
+  cure: 'Tippe: Gegenmittel heilt Zombies und impft Menschen (35 m). Geimpfte geben es weiter.',
+  nuke: 'Tippe: taktische Atombombe, 10 kt. Feuerball 170 m, alles bis 470 m zerstört, Verbrennungen bis 1,3 km.'
 };
-const STRIKE_COLOR = { bomb:'var(--alert)', air:'var(--air)', cure:'var(--cure)' };
+const STRIKE_COLOR = { bomb:'var(--alert)', air:'var(--air)', cure:'var(--cure)', nuke:'var(--nuke)' };
 let lastStrike = 'bomb';
 const BUILD_COLOR = { wall:'var(--wall)', soldier:'var(--soldier)', flame:'var(--flame)', tesla:'var(--tesla)' };
 let hintTimer = 0;
@@ -3875,7 +4158,7 @@ function updateHud(now){
   hudT = now;
   const c = counts();
   G.maxZ = Math.max(G.maxZ, c.z);
-  const K = c.h > 12000 ? 8 : c.h > 6000 ? 4 : c.h > 2500 ? 2 : 1;
+  const K = c.h + c.z <= 2500 ? 1 : Math.min(32, Math.ceil((c.h + c.z)/3000));   // ferne Menschen und Zombies: höchstens etwa 3000 pro Bild
   if (K !== G.coldK){ G.coldK = K; G.coldAcc.fill(0); }
   $('#cH').textContent = c.h; $('#cI').textContent = c.i; $('#cZ').textContent = c.z; $('#cS').textContent = c.s; $('#cK').textContent = G.kills;
   $('#cI').parentElement.hidden = !c.i;
@@ -3893,7 +4176,9 @@ function updateHud(now){
   $('#scale i').style.width = Math.round(m*cam.s) + 'px';
   $('#scale span').textContent = m >= 1000 ? String(m/1000).replace('.', ',') + ' km' : m + ' m';
   // Spielende
-  if (G.started && !G.ended && G.time > 1){
+  // Spielende erst, wenn keine Bombe mehr unterwegs ist und die Druckwelle durch ist
+  const busyStrike = G.strikes.some(st => st.kind !== 'cure' && st.t < (st.kind === 'nuke' ? st.at + 8 : st.end));
+  if (G.started && !G.ended && G.time > 1 && !busyStrike){
     if (c.h + c.s === 0){ G.ended = true; endScreen(false, c); }
     else if (c.z === 0){ G.ended = true; endScreen(true, c); }
   }
@@ -3943,7 +4228,7 @@ function openMenu(){
     ['Opfer der Bomben', String(G.dead)],
     ['Türme', `${fl} Flamme · ${te} Tesla`],
     ['Mauern', `${Math.round(G.walls.reduce((s, w) => s + w.len, 0))} m`]
-  ].concat(G.region ? [['Orte', String(G.labels.length)]] : [])
+  ].concat(G.region ? [['Orte', String(G.labels.length)], [G.labels[0].name, `${fmtNum(G.labels[0].pop || 0)} Einwohner zu Beginn`]] : [])
    .concat(lastMap.seed != null ? [['Größe', fmtSize(lastMap.size)], ['Seed', lastMap.seedLabel]] : []), [
     { label:'Weiter', cls:'primary', fn:() => { running = true; syncPlay(); } },
     { label:'Neu starten, gleiche Karte', fn:() => resetGame() }
@@ -3990,24 +4275,37 @@ function backToStart(){
 
 /* ---------- Startbildschirm ---------- */
 const popIn = $('#pop'), popOut = $('#popOut'), areaIn = $('#area');
-// Menschen-Regler je Gebietsgröße: [min, max, Schritt, Vorgabe]
+// Menschen-Regler: logarithmisch, damit man kleine Zahlen fein und große grob einstellen kann
+const sliderToPop = (v, mn, mx) => {
+  const n = mn*Math.pow(mx/mn, v/1000), st = n < 1000 ? 50 : n < 5000 ? 100 : n < 20000 ? 500 : 1000;
+  return Math.min(mx, Math.max(mn, Math.round(n/st)*st));
+};
+const popToSlider = (n, mn, mx) => Math.round(1000*Math.log(n/mn)/Math.log(mx/mn));
+function setupPop(input, out, cfg, key){
+  const [mn, mx, def] = cfg, saved = +lsGet(key), n = saved >= mn && saved <= mx ? saved : def;
+  input.min = 0; input.max = 1000; input.step = 1; input.value = popToSlider(n, mn, mx);
+  out.textContent = fmtNum(n);
+  return n;
+}
+// Menschen je Gebietsgröße: [min, max, Vorgabe]
+let realPop = 500, randPop = 800;
 const AREAS = {
-  600:   { pop:[100, 3000, 50, 500] },
-  1000:  { pop:[100, 5000, 50, 500] },
-  1500:  { pop:[100, 8000, 100, 800] },
-  3000:  { pop:[500, 30000, 500, 5000],   note:'3 × 3 km reicht für eine Kleinstadt samt Rand. Das Laden dauert ein paar Sekunden.' },
-  10000: { pop:[1000, 30000, 500, 15000], note:'10 × 10 km: Stadt mit Umland und Nachbarorten. Es werden etwa 50 Kartenkacheln geladen, das dauert eine Weile. Danach liegt die Karte im Zwischenspeicher.' }
+  600:   { pop:[100, 20000, 500] },
+  1000:  { pop:[100, 30000, 500] },
+  1500:  { pop:[100, 50000, 800] },
+  3000:  { pop:[500, 60000, 5000],    note:'3 × 3 km reicht für eine Kleinstadt samt Rand. Das Laden dauert ein paar Sekunden.' },
+  10000: { pop:[1000, 100000, 15000], note:'10 × 10 km: Stadt mit Umland und Nachbarorten. Es werden etwa 50 Kartenkacheln geladen, das dauert eine Weile. Danach liegt die Karte im Zwischenspeicher.' }
 };
 function syncArea(){
-  const a = AREAS[areaIn.value] || AREAS[1000], [mn, mx, st, def] = a.pop;
-  popIn.min = mn; popIn.max = mx; popIn.step = st;
-  const saved = +lsGet('ausbruch-pop-' + areaIn.value);
-  popIn.value = saved >= mn && saved <= mx ? saved : def;
-  popOut.textContent = fmtNum(+popIn.value);
+  const a = AREAS[areaIn.value] || AREAS[1000];
+  realPop = setupPop(popIn, popOut, a.pop, 'ausbruch-pop-' + areaIn.value);
   $('#areaNote').textContent = a.note || ''; $('#areaNote').hidden = !a.note;
 }
 areaIn.addEventListener('change', () => { lsSet('ausbruch-area', areaIn.value); syncArea(); });
-popIn.addEventListener('input', () => { popOut.textContent = fmtNum(+popIn.value); lsSet('ausbruch-pop-' + areaIn.value, +popIn.value); });
+popIn.addEventListener('input', () => {
+  const [mn, mx] = (AREAS[areaIn.value] || AREAS[1000]).pop;
+  realPop = sliderToPop(+popIn.value, mn, mx); popOut.textContent = fmtNum(realPop); lsSet('ausbruch-pop-' + areaIn.value, realPop);
+});
 { const v = lsGet('ausbruch-area'); if (v && AREAS[v]) areaIn.value = String(v); }
 syncArea();
 function setStatus(msg, err){ const s = $('#status'); s.textContent = msg; s.classList.toggle('err', !!err); }
@@ -4073,7 +4371,7 @@ async function loadReal(lat, lon, name){
     if (!f.roads.length && !f.buildings.length) throw new Error('An diesem Ort gibt es keine Kartendaten. Wähle einen bewohnten Ort.');
     cachePut(key, f);
   }
-  return { f, size, name, src: f.src || 'osm', humans: +popIn.value };
+  return { f, size, name, src: f.src || 'osm', humans: realPop };
 }
 
 $('#loadBtn').addEventListener('click', () => launch(async () => {
@@ -4103,25 +4401,32 @@ const newSeed = () => String(1 + Math.floor(Math.random()*999999));
 seedIn.value = newSeed();
 $('#diceBtn').addEventListener('click', () => { seedIn.value = newSeed(); });
 
-// Menschen-Regler und Beschreibung passend zur Größe: [min, max, Schritt, Vorgabe]
+// Menschen und Beschreibung passend zur Größe: [min, max, Vorgabe]
 const RSIZES = {
-  1000:  { pop:[100, 2000, 50, 500],      note:'Kleinstadt: eine Stadt füllt die ganze Karte.' },
-  1500:  { pop:[100, 3000, 50, 800],      note:'Stadt: eine Stadt füllt die ganze Karte.' },
-  3000:  { pop:[500, 30000, 500, 2500],    note:'Großstadt: eine große Stadt füllt die ganze Karte.' },
-  6000:  { pop:[1000, 30000, 500, 4000],  note:'Landkreis: Großstadt, Städte und Dörfer, verbunden durch Landstraßen und Autobahn. Dazwischen Felder, Höfe, Wald, Seen und Flüsse.' },
-  10000: { pop:[2000, 30000, 500, 8000], note:'Riesig: Großstadt, ein paar Städte und gut zehn Dörfer auf 100 km². Der Aufbau dauert ein paar Sekunden.' },
-  16000: { pop:[4000, 30000, 500, 12000], note:'Gigantisch: zwei Großstädte, viele Städte und gut zwanzig Dörfer auf 256 km². Der Aufbau dauert etwas länger.' }
+  1000:  { pop:[100, 30000, 500],     note:'Kleinstadt: eine Stadt füllt die ganze Karte.' },
+  1500:  { pop:[100, 50000, 800],     note:'Stadt: eine Stadt füllt die ganze Karte.' },
+  3000:  { pop:[500, 60000, 2500],    note:'Großstadt: eine große Stadt füllt die ganze Karte.' },
+  6000:  { pop:[1000, 60000, 4000],   note:'Landkreis: Großstadt, Städte und Dörfer, verbunden durch Landstraßen und Autobahn, dazwischen Felder, Höfe, Wald und Seen. Die Menschen verteilen sich nach Größe der Orte.' },
+  10000: { pop:[2000, 80000, 8000],   note:'Riesig: Großstadt, ein paar Städte und gut zehn Dörfer auf 100 km². Der Aufbau dauert ein paar Sekunden.' },
+  16000: { pop:[4000, 100000, 12000], note:'Gigantisch: zwei Großstädte, viele Städte und gut zwanzig Dörfer auf 256 km². Der Aufbau dauert etwas länger.' }
 };
+// Anteil der größten Stadt an allen Menschen (Durchschnitt über viele Seeds)
+const CITY_SHARE = { 6000:0.46, 10000:0.45, 16000:0.3 };
 function syncSize(){
-  const sz = RSIZES[rsize.value] || RSIZES[1500], [mn, mx, st, def] = sz.pop;
-  rpop.min = mn; rpop.max = mx; rpop.step = st;
-  const saved = +lsGet('ausbruch-rpop-' + rsize.value);
-  rpop.value = saved >= mn && saved <= mx ? saved : def;
-  rpopOut.textContent = fmtNum(+rpop.value);
-  $('#rsizeNote').textContent = sz.note;
+  const sz = RSIZES[rsize.value] || RSIZES[1500];
+  randPop = setupPop(rpop, rpopOut, sz.pop, 'ausbruch-rpop-' + rsize.value);
+  syncNote();
+}
+function syncNote(){
+  const sz = RSIZES[rsize.value] || RSIZES[1500], sh = CITY_SHARE[rsize.value];
+  $('#rsizeNote').textContent = sz.note + (sh ? ` Bei ${fmtNum(randPop)} Menschen leben etwa ${fmtNum(Math.round(randPop*sh/500)*500)} in der größten Stadt.` : '');
 }
 rsize.addEventListener('change', () => { lsSet('ausbruch-rsize', rsize.value); syncSize(); });
-rpop.addEventListener('input', () => { rpopOut.textContent = fmtNum(+rpop.value); lsSet('ausbruch-rpop-' + rsize.value, +rpop.value); });
+rpop.addEventListener('input', () => {
+  const [mn, mx] = (RSIZES[rsize.value] || RSIZES[1500]).pop;
+  randPop = sliderToPop(+rpop.value, mn, mx); rpopOut.textContent = fmtNum(randPop); lsSet('ausbruch-rpop-' + rsize.value, randPop);
+  syncNote();
+});
 { const v = lsGet('ausbruch-rsize'); if (v && RSIZES[v]) rsize.value = String(v); }
 syncSize();
 
@@ -4131,7 +4436,7 @@ function buildRandom(size, humans){
     if (!label){ label = newSeed(); seedIn.value = label; }
     const seed = /^\d+$/.test(label) ? (parseInt(label, 10) % 999999) + 1 : hashSeed(label);
     size = size || +rsize.value;
-    humans = humans || +rpop.value;
+    humans = humans || randPop;
     let res;
     if (size >= REGION_MIN) res = await randomRegion(seed, size, say);
     else { await say('Baue Zufallsstadt …'); res = randomCity(seed, size); }
@@ -4154,7 +4459,8 @@ function frame(now){
   if (G && running && $('#start').hidden){
     // Zeitschritt: bei ×10 viele Teilschritte; reicht die Rechenzeit nicht, wird die Spielzeit gedehnt
     const want = rdt * TIME_BASE * SPEEDS[speedIdx];
-    const n = Math.max(1, Math.min(MAX_STEPS, Math.ceil(want / MAX_SUBSTEP)));
+    // so viele Teilschritte, wie in gut 30 ms Rechenzeit passen (gemessen am Durchschnitt der letzten)
+    const n = Math.max(1, Math.min(MAX_STEPS, Math.ceil(want / MAX_SUBSTEP), Math.floor(32 / Math.max(0.5, G.stepMs))));
     const sdt = Math.min(want / n, HARD_SUBSTEP), gdt = sdt * n;
     if (G.started){
       G.fieldT -= gdt;
@@ -4176,8 +4482,13 @@ function frame(now){
     // ferne Menschen: jedes Bild ist eine andere Gruppe dran und holt die verstrichene Zeit nach
     const K = G.coldK, sel = G.frameNo++ % K;
     for (let k = 0; k < K; k++) G.coldAcc[k] += gdt;
-    const cdt = Math.min(G.coldAcc[sel], 4*COLD_STEP); G.coldAcc[sel] = 0;   // bei ×10 gehen ferne Menschen etwas gemächlicher
-    for (let k=0; k<n; k++) step(sdt, k === 0 ? cdt : 0, sel);
+    // bei sehr vielen Menschen oder ×10 gehen ferne Menschen gemächlicher (höchstens ein bis vier Schritte pro Runde)
+    const acc = G.coldAcc[sel]; G.coldAcc[sel] = 0;
+    const cdt = Math.min(acc, Math.max(1, Math.min(4, Math.round(8/K)))*COLD_STEP);
+    const zdt = Math.min(acc, 10*ZCOLD_STEP);    // ferne Zombies holen bis 6 s nach: Horden ziehen auch ungesehen weiter
+    const ts = performance.now();
+    for (let k=0; k<n; k++) step(sdt, k === 0 ? cdt : 0, sel, k === 0 ? zdt : 0);
+    G.stepMs = G.stepMs*0.85 + 0.15*(performance.now() - ts)/n;
     G.time += gdt;
     updStrikes(rdt); updSmoke(rdt);
     PERF.sim += performance.now() - t1;
@@ -4190,7 +4501,7 @@ function frame(now){
 requestAnimationFrame(frame);
 
 // Test-Zugang für die Konsole
-window.__ausbruch = { get G(){ return G; }, cam, randomCity, randomRegion, decodeTile, addTile, emptyFeatures, placeOutbreak, placeSoldier, placeTower, addWall, setTool, step, updateFields, counts, tiles, zoomAt, render, PERF, launch, scentStart, scentStep, updateHordes, dropBomb, callAirstrike, dropCure, explode, applyCure };
+window.__ausbruch = { get G(){ return G; }, cam, randomCity, randomRegion, decodeTile, addTile, emptyFeatures, placeOutbreak, placeSoldier, placeTower, addWall, setTool, step, updateFields, counts, tiles, zoomAt, render, PERF, launch, scentStart, scentStep, updateHordes, dropBomb, callAirstrike, dropCure, explode, applyCure, dropNuke };
 </script>
 </body>
 </html>
