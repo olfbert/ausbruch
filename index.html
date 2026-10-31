@@ -1,0 +1,1621 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ausbruch">
+<meta name="theme-color" content="#0b1014">
+<title>Ausbruch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Saira+Stencil+One&display=swap">
+<style>
+/* Layout: Vollbild-Lagekarte bei Nacht. Oben das Lage-HUD, unten die Werkzeugleiste, dazwischen nur Karte. */
+:root{
+  --void:#070a0d;        /* außerhalb der Karte */
+  --ground:#0e1317;      /* Freifläche */
+  --panel:rgba(12,17,22,.88);
+  --panel-line:#25313c;
+  --ink:#e8edf1;
+  --muted:#8796a3;
+  --human:#f4f6f8;
+  --zombie:#5cff7a;
+  --soldier:#ffb43a;
+  --wall:#d9c7a5;
+  --alert:#ff5f52;
+  --f-display:"Saira Stencil One","Arial Black",Impact,sans-serif;
+  --f-ui:"Barlow Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--void);color:var(--ink);overflow:hidden;
+  font-family:var(--f-ui);font-size:16px;-webkit-text-size-adjust:100%;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+button,select,input{font:inherit;color:inherit}
+button{touch-action:manipulation;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--zombie);outline-offset:2px}
+[hidden]{display:none!important}
+#map{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;background:var(--void)}
+
+/* ---------- Startbildschirm ---------- */
+#start{position:fixed;inset:0;overflow-y:auto;z-index:30;
+  background:
+    linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px) 0 0/40px 40px,
+    linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/40px 40px,
+    radial-gradient(120% 80% at 80% 0%,rgba(92,255,122,.10),transparent 60%),
+    var(--ground);
+  padding-top:calc(env(safe-area-inset-top,0px) + 28px);
+  padding-bottom:calc(env(safe-area-inset-bottom,0px) + 28px);
+  padding-left:max(18px,env(safe-area-inset-left,0px));
+  padding-right:max(18px,env(safe-area-inset-right,0px));
+  -webkit-user-select:text;user-select:text}
+.start-inner{max-width:440px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.eyebrow{font-family:var(--f-num);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--zombie)}
+#start h1{font-family:var(--f-display);font-weight:400;font-size:clamp(52px,17vw,84px);line-height:.9;margin:0;letter-spacing:.01em;color:var(--ink)}
+#start h1 span{color:var(--zombie)}
+.lead{margin:0;font-size:19px;line-height:1.35;color:#c8d1d8;max-width:36ch;font-weight:500}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;margin:0;padding:12px 14px;border:1px solid var(--panel-line);border-radius:10px;background:rgba(0,0,0,.25)}
+.legend dt{display:flex;align-items:center}
+.legend dd{margin:0;font-size:15px;color:#c8d1d8}
+.legend dd b{color:var(--ink);font-weight:600}
+.legend .num{font-family:var(--f-num);font-size:12px;color:var(--muted)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex:none}
+.dot.h{background:var(--human)}
+.dot.z{background:var(--zombie);box-shadow:0 0 0 4px rgba(92,255,122,.18)}
+.dot.s{background:var(--soldier);box-shadow:0 0 0 2px #1a1206 inset}
+.form{display:flex;flex-direction:column;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.row{display:flex;gap:8px}
+.row input{flex:1;min-width:0}
+input[type=text],select{height:46px;border-radius:9px;border:1px solid var(--panel-line);background:#0a0f13;padding:0 12px;font-size:17px;font-weight:500;-webkit-appearance:none;appearance:none}
+select{background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 18px) 20px,calc(100% - 13px) 20px;background-size:5px 5px;background-repeat:no-repeat;padding-right:30px}
+input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{height:50px;border-radius:10px;border:1px solid var(--panel-line);background:#121a20;font-size:18px;font-weight:600;letter-spacing:.03em;padding:0 16px}
+.btn.primary{background:var(--zombie);border-color:var(--zombie);color:#04140a;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.btn.primary:disabled{opacity:.55}
+.btn.small{height:46px;font-size:15px;padding:0 12px;white-space:nowrap}
+.btn.ghost{background:transparent}
+#status{margin:0;min-height:1.4em;font-family:var(--f-num);font-size:13px;color:var(--muted);line-height:1.45}
+#status.err{color:var(--alert)}
+.fine{margin:0;font-size:13px;color:var(--muted);line-height:1.4}
+.fine a{color:#c8d1d8}
+
+/* ---------- HUD oben ---------- */
+#hud{position:fixed;top:0;left:0;right:0;z-index:10;pointer-events:none;
+  padding-top:calc(env(safe-area-inset-top,0px) + 8px);
+  padding-left:max(10px,env(safe-area-inset-left,0px));
+  padding-right:max(10px,env(safe-area-inset-right,0px))}
+.hud-card{pointer-events:auto;background:var(--panel);border:1px solid var(--panel-line);border-radius:14px;padding:10px 12px 10px;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);display:flex;flex-direction:column;gap:8px;max-width:560px;margin:0 auto}
+.hud-top{display:flex;align-items:center;gap:10px;min-width:0}
+.brand{font-family:var(--f-display);font-size:18px;letter-spacing:.02em;color:var(--zombie);flex:none}
+#placeName{flex:1;min-width:0;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#c8d1d8}
+#clock{font-family:var(--f-num);font-size:13px;color:var(--ink);flex:none;font-variant-numeric:tabular-nums}
+.icon-btn{width:36px;height:36px;border-radius:9px;border:1px solid var(--panel-line);background:#121a20;display:grid;place-items:center;flex:none;padding:0}
+.icon-btn svg{width:18px;height:18px}
+.popbar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:#1b252e}
+.popbar i{display:block;height:100%;transition:width .3s}
+#barH{background:var(--human)}
+#barS{background:var(--soldier)}
+#barZ{background:var(--zombie)}
+.counts{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px;color:var(--muted);font-weight:500}
+.counts span{display:inline-flex;align-items:center;gap:6px}
+.counts em{font-style:normal;font-family:var(--f-num);font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums}
+.counts .dot{width:8px;height:8px}
+.counts .dot.z{box-shadow:0 0 0 3px rgba(92,255,122,.18)}
+
+/* ---------- Werkzeugleiste unten ---------- */
+#dock{position:fixed;left:0;right:0;bottom:0;z-index:10;pointer-events:none;display:flex;flex-direction:column;gap:8px;align-items:stretch;
+  padding-bottom:calc(env(safe-area-inset-bottom,0px) + 8px);
+  padding-left:max(10px,env(safe-area-inset-left,0px));
+  padding-right:max(10px,env(safe-area-inset-right,0px))}
+.dock-inner{max-width:560px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+#hint{align-self:center;max-width:100%;background:var(--panel);border:1px solid var(--panel-line);border-radius:999px;padding:6px 14px;font-size:14px;font-weight:500;color:#d5dde3;text-align:center;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);text-wrap:balance}
+.meta{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;padding:0 4px}
+#scale{display:flex;align-items:center;gap:8px;font-family:var(--f-num);font-size:11px;color:#c8d1d8;text-shadow:0 1px 2px #000}
+#scale i{display:block;height:6px;border:1.5px solid #c8d1d8;border-top:0;box-shadow:0 1px 2px rgba(0,0,0,.6)}
+.osm{font-size:11px;color:var(--muted);text-shadow:0 1px 2px #000;pointer-events:auto}
+.osm a{color:var(--muted)}
+.tools{pointer-events:auto;display:flex;justify-content:space-between;gap:1px;background:var(--panel);border:1px solid var(--panel-line);border-radius:16px;padding:6px;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.tool{--c:var(--ink);flex:1 1 0;min-width:0;height:54px;border:0;border-radius:11px;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);padding:0}
+.tool svg{width:22px;height:22px}
+.tool span{font-size:12px;font-weight:600;letter-spacing:0;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:clip;font-stretch:condensed}
+.tool strong{font-family:var(--f-num);font-size:16px;line-height:22px;color:var(--ink);font-weight:600}
+.tool.on{background:rgba(255,255,255,.08);color:var(--c)}
+.tool[data-tool=outbreak]{--c:var(--zombie)}
+.tool[data-tool=wall]{--c:var(--wall)}
+.tool[data-tool=soldier]{--c:var(--soldier)}
+.tool[data-tool=erase]{--c:var(--alert)}
+.sep{width:1px;background:var(--panel-line);margin:8px 2px;flex:none}
+
+/* ---------- Dialog ---------- */
+#modal{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(3,5,7,.62);
+  padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
+.card{width:100%;max-width:380px;background:#0f161b;border:1px solid var(--panel-line);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:14px}
+.card h2{margin:0;font-family:var(--f-display);font-weight:400;font-size:30px;line-height:1;letter-spacing:.01em}
+.card h2.win{color:var(--soldier)}
+.card h2.lose{color:var(--zombie)}
+.card p{margin:0;font-size:17px;line-height:1.4;color:#c8d1d8}
+.stats{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin:0;font-size:15px}
+.stats dt{color:var(--muted)}
+.stats dd{margin:0;font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:right}
+.btns{display:flex;flex-direction:column;gap:8px}
+
+@media (min-width:700px){
+  .hud-card{margin:0}
+  #hud{padding-left:max(16px,env(safe-area-inset-left,0px))}
+  .hud-card{max-width:420px}
+}
+@media (max-width:400px){.tool span{font-size:11px}.tool svg{width:20px;height:20px}}
+@media (prefers-reduced-motion:reduce){.popbar i{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="map" aria-label="Karte mit Menschen und Zombies"></canvas>
+
+<!-- Startbildschirm -->
+<section id="start">
+  <div class="start-inner">
+    <div class="eyebrow">Simulation auf OpenStreetMap</div>
+    <h1>AUS<span>BRUCH</span></h1>
+    <p class="lead">Wähle einen echten Ort. Menschen laufen durch die Straßen, bis du den ersten Zombie aussetzt. Wer berührt wird, wird selbst einer.</p>
+    <dl class="legend">
+      <dt><span class="dot h"></span></dt><dd><b>Mensch</b> <span class="num">· 1,4 m/s</span></dd>
+      <dt><span class="dot z"></span></dt><dd><b>Zombie</b> <span class="num">· 2,8 m/s</span></dd>
+      <dt><span class="dot s"></span></dt><dd><b>Soldat</b> <span class="num">· schießt bis 30 m</span></dd>
+    </dl>
+    <div class="form">
+      <div class="field">
+        <label for="q">Ort, Adresse oder Koordinaten</label>
+        <div class="row">
+          <input id="q" type="text" value="Obertshausen" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
+          <button id="geoBtn" class="btn small" type="button">Mein Standort</button>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="area">Gebiet</label>
+          <select id="area">
+            <option value="600">600 × 600 m</option>
+            <option value="1000" selected>1 × 1 km</option>
+            <option value="1500">1,5 × 1,5 km</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="pop">Menschen: <output id="popOut">500</output></label>
+          <input id="pop" type="range" min="100" max="2000" step="50" value="500">
+        </div>
+      </div>
+      <button id="loadBtn" class="btn primary" type="button">Karte laden</button>
+      <button id="demoBtn" class="btn ghost" type="button">Demo-Stadt ohne Internet</button>
+      <p id="status" role="status" aria-live="polite"></p>
+    </div>
+    <p class="fine">Kartendaten © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap-Mitwirkende</a> (ODbL), geladen über Nominatim und die Overpass-API. Geladene Karten werden auf diesem Gerät zwischengespeichert.</p>
+  </div>
+</section>
+
+<!-- Lage-HUD -->
+<div id="hud" hidden>
+  <div class="hud-card">
+    <div class="hud-top">
+      <span class="brand">AUSBRUCH</span>
+      <span id="placeName">–</span>
+      <span id="clock">Tag 1 · 06:00</span>
+      <button id="menuBtn" class="icon-btn" type="button" aria-label="Menü">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+    <div class="popbar" aria-hidden="true"><i id="barH"></i><i id="barS"></i><i id="barZ"></i></div>
+    <div class="counts">
+      <span><b class="dot h"></b><em id="cH">0</em> Menschen</span>
+      <span><b class="dot z"></b><em id="cZ">0</em> Zombies</span>
+      <span><b class="dot s"></b><em id="cS">0</em> Soldaten</span>
+      <span><em id="cK">0</em> erledigt</span>
+    </div>
+  </div>
+</div>
+
+<!-- Werkzeuge -->
+<div id="dock" hidden>
+  <div class="dock-inner">
+    <div id="hint">Tippe auf die Karte: Dort bricht das Virus aus.</div>
+    <div class="meta">
+      <div id="scale"><i style="width:80px"></i><span>100 m</span></div>
+      <div class="osm">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
+    </div>
+    <div class="tools" role="toolbar" aria-label="Werkzeuge">
+      <button class="tool" data-tool="pan" type="button" aria-label="Ansicht">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>
+        <span>Ansicht</span>
+      </button>
+      <button class="tool" data-tool="outbreak" type="button" aria-label="Ausbruch">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>
+        <span>Ausbruch</span>
+      </button>
+      <button class="tool" data-tool="wall" type="button" aria-label="Mauer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 9.7h18M3 14.3h18M9 5v4.7M15 5v4.7M6 9.7v4.6M12 9.7v4.6M18 9.7v4.6M9 14.3V19M15 14.3V19"/></svg>
+        <span>Mauer</span>
+      </button>
+      <button class="tool" data-tool="soldier" type="button" aria-label="Soldat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>
+        <span>Soldat</span>
+      </button>
+      <button class="tool" data-tool="erase" type="button" aria-label="Abriss">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5M14 11v5"/></svg>
+        <span>Abriss</span>
+      </button>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="tool" id="playBtn" type="button" aria-label="Pause">
+        <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></svg>
+        <span>Pause</span>
+      </button>
+      <button class="tool" id="speedBtn" type="button" aria-label="Tempo">
+        <strong>×1</strong>
+        <span>Tempo</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Dialog -->
+<div id="modal" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <h2 id="mTitle"></h2>
+    <p id="mText"></p>
+    <dl class="stats" id="mStats"></dl>
+    <div class="btns" id="mBtns"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   AUSBRUCH – Zombie-Ausbruch auf echten OpenStreetMap-Karten
+   Eine Datei, kein Build. Karten: Nominatim (Ortssuche) + Overpass (Daten).
+   ===================================================================== */
+
+// ---------- Spielregeln ----------
+const CELL = 2;                     // Rastergröße in Metern (Laufwege)
+const HUMAN_SPEED = 1.4;            // m/s, normales Gehen
+const ZOMBIE_SPEED = HUMAN_SPEED*2; // doppelt so schnell
+const TIME_BASE = 10;               // Spielsekunden pro echter Sekunde bei ×1
+const SPEEDS = [1, 2, 4];
+const ZOMBIE_SENSE = 40;            // Zellen Laufweg (= 80 m): so weit wittern Zombies Beute
+const HUMAN_FEAR = 14;              // Zellen Laufweg (= 28 m): ab hier fliehen Menschen
+const BITE_DIST = 1.6;              // m: Berührung
+const SOLDIER_RANGE = 30;           // m
+const SOLDIER_COOLDOWN = 0.9;       // s zwischen Schüssen
+const SOLDIER_HIT = 0.75;           // Trefferquote
+const WALL_THICK = 1.6;             // m Radius beim Mauer-Rastern
+const FIELD_INTERVAL = 0.3;         // s Spielzeit zwischen Wegfeld-Updates
+const MAX_SUBSTEP = 0.25;           // s Spielzeit pro Simulationsschritt
+const INF = 32767;
+const TAU = Math.PI*2;
+const H = 0, Z = 1, S = 2;          // Agententypen
+
+// Kartenfarben (Lagekarte bei Nacht)
+const COL = {
+  void:'#070a0d', ground:'#0e1317', green:'#111d16', wood:'#0f1c14',
+  water:'#0b2a42', waterEdge:'#17537c',
+  roadCase:'#151b21', roadMajor:'#38424c', road:'#2c353e', path:'#242c34',
+  bldg:'#1a2430', bldgEdge:'#32475d', barrier:'#4a5866', rail:'#3a4048',
+  frame:'#3a4a58', grid:'rgba(255,255,255,0.035)',
+  human:'#f4f6f8', zombie:'#5cff7a', zombieGlow:'rgba(92,255,122,0.17)',
+  soldier:'#ffb43a', soldierRing:'#1a1206', wall:'#d9c7a5', wallEdge:'#5b4f3d', corpse:'rgba(70,150,85,0.45)'
+};
+
+// ---------- DOM ----------
+const $ = s => document.querySelector(s);
+const cv = $('#map'), ctx = cv.getContext('2d');
+let dpr = Math.min(2, window.devicePixelRatio || 1), VW = 0, VH = 0;
+function resize(){
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  VW = window.innerWidth; VH = window.innerHeight;
+  cv.width = Math.round(VW*dpr); cv.height = Math.round(VH*dpr);
+}
+window.addEventListener('resize', () => { const old = VW; resize(); if (G && old) { cam.x += (VW-old)/2; clampCam(); } });
+resize();
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+// ---------- Zufall ----------
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+const rand = Math.random;
+
+/* =====================================================================
+   1) KARTENDATEN LADEN
+   ===================================================================== */
+const OVERPASS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+];
+
+async function geocode(q){
+  const m = q.match(/^\s*(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)\s*$/);
+  if (m) return { lat:+m[1], lon:+m[2], name:`${(+m[1]).toFixed(4)}, ${(+m[2]).toFixed(4)}` };
+  const memo = lsGet('ausbruch-geo') || {};
+  const key = q.trim().toLowerCase();
+  if (memo[key]) return memo[key];
+  const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=de&q=' + encodeURIComponent(q);
+  let r;
+  try { r = await fetch(url, { headers:{ 'Accept':'application/json' } }); }
+  catch(e){ throw new Error('Ortssuche nicht erreichbar. Prüfe die Internetverbindung.'); }
+  if (!r.ok) throw new Error(`Ortssuche antwortet mit Fehler ${r.status}. Versuch es gleich noch einmal.`);
+  const j = await r.json();
+  if (!j.length) throw new Error('Ort nicht gefunden. Versuch es mit Stadt und Straße, z. B. „Schlossstraße, Offenbach“.');
+  const res = { lat:+j[0].lat, lon:+j[0].lon, name: j[0].name || j[0].display_name.split(',')[0] };
+  memo[key] = res; lsSet('ausbruch-geo', memo);
+  return res;
+}
+
+function buildQuery(lat, lon, size){
+  const half = size/2*1.08;
+  const dLat = half/110540, dLon = half/(111320*Math.cos(lat*Math.PI/180));
+  const bb = `${(lat-dLat).toFixed(6)},${(lon-dLon).toFixed(6)},${(lat+dLat).toFixed(6)},${(lon+dLon).toFixed(6)}`;
+  return `[out:json][timeout:60];
+(
+ way["building"](${bb});
+ relation["building"]["type"="multipolygon"](${bb});
+ way["natural"="water"](${bb});
+ relation["natural"="water"](${bb});
+ way["waterway"~"^(riverbank|dock|river|canal|stream)$"](${bb});
+ way["landuse"~"^(reservoir|basin)$"](${bb});
+ way["highway"](${bb});
+ way["barrier"~"^(wall|city_wall|fence|retaining_wall|hedge)$"](${bb});
+ way["leisure"~"^(park|garden|pitch|playground|sports_centre)$"](${bb});
+ way["landuse"~"^(grass|meadow|forest|recreation_ground|village_green|cemetery|allotments|orchard|farmland)$"](${bb});
+ way["natural"~"^(wood|scrub|grassland)$"](${bb});
+ way["railway"~"^(rail|tram|light_rail|subway)$"](${bb});
+);
+out geom;`;
+}
+
+async function fetchOverpass(query, onTry){
+  let lastErr = null;
+  for (let i=0; i<OVERPASS.length; i++){
+    const ep = OVERPASS[i];
+    onTry && onTry(i);
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 75000);
+    try {
+      const r = await fetch(ep, { method:'POST', body:'data='+encodeURIComponent(query),
+        headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, signal:ctrl.signal });
+      clearTimeout(to);
+      if (!r.ok){ lastErr = new Error(r.status===429 ? 'Kartenserver ist gerade ausgelastet.' : `Kartenserver antwortet mit Fehler ${r.status}.`); continue; }
+      return await r.json();
+    } catch(e){
+      clearTimeout(to);
+      lastErr = new Error(e.name==='AbortError' ? 'Kartenserver hat zu lange gebraucht.' : 'Kartenserver nicht erreichbar.');
+    }
+  }
+  throw new Error((lastErr ? lastErr.message+' ' : '') + 'Versuch es gleich noch einmal oder wähle ein kleineres Gebiet.');
+}
+
+// Wege und Flächen aus Overpass in Meter-Koordinaten umrechnen (0,0 = Kartenmitte, y nach unten)
+const ROAD_W = {
+  motorway:16, trunk:14, primary:12, secondary:10, tertiary:9, unclassified:7, residential:7,
+  living_street:6, pedestrian:6, service:4.5, track:3.5, footway:2.6, path:2.4, cycleway:2.6,
+  bridleway:2.4, steps:2.6, motorway_link:8, trunk_link:8, primary_link:8, secondary_link:7, tertiary_link:7
+};
+const MAJOR = /^(motorway|trunk|primary|secondary|tertiary)/;
+const SMALL = /^(footway|path|cycleway|bridleway|steps|track)$/;
+
+function isWater(t){
+  return t.natural==='water' || t.waterway==='riverbank' || t.waterway==='dock' || t.landuse==='reservoir' || t.landuse==='basin';
+}
+
+function parseOSM(json, lat0, lon0){
+  const kx = 111320*Math.cos(lat0*Math.PI/180), ky = 110540;
+  const P = g => [ (g.lon-lon0)*kx, -(g.lat-lat0)*ky ];
+  const f = emptyFeatures();
+  for (const el of json.elements || []){
+    const t = el.tags || {};
+    if (el.type==='way'){
+      if (!el.geometry) continue;
+      const pts = el.geometry.filter(Boolean).map(P);
+      if (pts.length < 2) continue;
+      const closed = el.nodes ? (el.nodes[0]===el.nodes[el.nodes.length-1]) : samePt(pts[0], pts[pts.length-1]);
+      classifyWay(t, pts, closed, f);
+    } else if (el.type==='relation'){
+      const segs = (el.members||[]).filter(m => m.type==='way' && m.geometry)
+        .map(m => m.geometry.filter(Boolean).map(P)).filter(s => s.length>=2);
+      if (!segs.length) continue;
+      const rings = assembleRings(segs);
+      if (t.building) f.buildings.push(rings);
+      else if (isWater(t)) f.water.push(rings);
+    }
+  }
+  return f;
+}
+
+function emptyFeatures(){
+  return { buildings:[], water:[], waterLines:[], roads:[], roadAreas:[], barriers:[], green:[], wood:[], rails:[] };
+}
+
+function classifyWay(t, pts, closed, f){
+  if (t.building && t.building!=='roof' && closed && !(+t.layer < 0) && t.location!=='underground'){ f.buildings.push([pts]); return; }
+  if (isWater(t) && closed){ f.water.push([pts]); return; }
+  if (t.waterway && /^(river|canal|stream)$/.test(t.waterway)){
+    if (t.tunnel && t.tunnel!=='no') return;              // verrohrt: unterirdisch
+    f.waterLines.push({ pts, w: t.waterway==='river' ? 12 : t.waterway==='canal' ? 10 : 3 });
+    return;
+  }
+  if (t.highway){
+    if (/^(proposed|abandoned|razed|corridor|elevator|platform|bus_stop)$/.test(t.highway)) return;
+    if (t.area==='yes' && closed){ f.roadAreas.push([pts]); return; }
+    const tunnel = !!t.tunnel && t.tunnel!=='no' && t.tunnel!=='building_passage';
+    const w = ROAD_W[t.highway] || 5;
+    f.roads.push({ pts, w, tunnel, major: MAJOR.test(t.highway), small: SMALL.test(t.highway) });
+    return;
+  }
+  if (t.barrier){
+    f.barriers.push({ pts, w: t.barrier==='city_wall' ? 3 : t.barrier==='hedge' ? 1.5 : 1 });
+    return;
+  }
+  if (t.railway){ f.rails.push(pts); return; }
+  if (closed && (t.landuse==='forest' || t.natural==='wood' || t.natural==='scrub')){ f.wood.push([pts]); return; }
+  if (closed && (t.leisure || t.landuse || t.natural)){ f.green.push([pts]); }
+}
+
+function samePt(a, b){ return Math.abs(a[0]-b[0]) < 0.05 && Math.abs(a[1]-b[1]) < 0.05; }
+
+// Multipolygon-Teilstücke zu Ringen verbinden
+function assembleRings(segs){
+  const pool = segs.map(s => s.slice());
+  const rings = [];
+  while (pool.length){
+    let ring = pool.pop();
+    let guard = 0;
+    while (!samePt(ring[0], ring[ring.length-1]) && guard++ < 5000){
+      const end = ring[ring.length-1];
+      let found = false;
+      for (let i=0; i<pool.length; i++){
+        const s = pool[i];
+        if (samePt(s[0], end)){ ring = ring.concat(s.slice(1)); pool.splice(i,1); found = true; break; }
+        if (samePt(s[s.length-1], end)){ ring = ring.concat(s.slice(0,-1).reverse()); pool.splice(i,1); found = true; break; }
+      }
+      if (!found) break;
+    }
+    if (ring.length >= 3) rings.push(ring);
+  }
+  return rings;
+}
+
+// ---------- Zwischenspeicher (IndexedDB) ----------
+function lsGet(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } }
+function lsSet(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+function idb(){
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('ausbruch', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('maps');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function cacheGet(key){
+  try {
+    const db = await idb();
+    return await new Promise(res => {
+      const q = db.transaction('maps').objectStore('maps').get(key);
+      q.onsuccess = () => res(q.result || null); q.onerror = () => res(null);
+    });
+  } catch(e){ return null; }
+}
+async function cachePut(key, val){
+  try {
+    const db = await idb();
+    const keys = (lsGet('ausbruch-keys') || []).filter(k => k!==key);
+    keys.unshift(key);
+    const drop = keys.splice(6);
+    await new Promise(res => {
+      const tx = db.transaction('maps', 'readwrite');
+      const st = tx.objectStore('maps');
+      st.put(val, key);
+      drop.forEach(k => st.delete(k));
+      tx.oncomplete = res; tx.onerror = res; tx.onabort = res;
+    });
+    lsSet('ausbruch-keys', keys);
+  } catch(e){}
+}
+
+/* =====================================================================
+   2) DEMO-STADT (funktioniert ohne Internet)
+   ===================================================================== */
+function demoFeatures(){
+  const rnd = mulberry32(1337);
+  const f = emptyFeatures();
+  const half = 400;
+  const riverY = x => 70 + 38*Math.sin(x/140) + 10*Math.sin(x/47);
+  // Fluss
+  const river = [];
+  for (let x=-460; x<=460; x+=10) river.push([x, riverY(x)]);
+  f.waterLines.push({ pts:river, w:24 });
+  // Straßenraster
+  const xs = [-350,-245,-135,-25,85,195,300];
+  const ys = [-345,-235,-125,-15,165,265,355];
+  const bridges = new Set([1,4,6]);
+  xs.forEach((x, i) => {
+    const jx = x + (rnd()-0.5)*8;
+    const w = (i===3) ? 11 : 7;
+    if (bridges.has(i)) f.roads.push({ pts:[[jx,-half-30],[jx,half+30]], w, major:i===3||i===1, small:false });
+    else {
+      f.roads.push({ pts:[[jx,-half-30],[jx,riverY(jx)-26]], w, major:i===3, small:false });
+      f.roads.push({ pts:[[jx,riverY(jx)+26],[jx,half+30]], w, major:i===3, small:false });
+    }
+  });
+  ys.forEach((y, i) => {
+    const w = (i===2) ? 11 : 7;
+    f.roads.push({ pts:[[-half-30,y],[half+30,y+(rnd()-0.5)*10]], w, major:i===2, small:false });
+  });
+  // Uferweg nördlich des Flusses
+  const promenade = [];
+  for (let x=-460; x<=460; x+=10) promenade.push([x, riverY(x)-20]);
+  f.roads.push({ pts:promenade, w:3, small:true });
+  // Park mit Teich
+  const px0 = xs[4], px1 = xs[5], py0 = ys[0], py1 = ys[1];
+  f.green.push([[[px0+5,py0+5],[px1-5,py0+5],[px1-5,py1-5],[px0+5,py1-5]]]);
+  const pond = []; for (let a=0; a<TAU; a+=0.3) pond.push([ (px0+px1)/2 + 26*Math.cos(a), (py0+py1)/2 + 18*Math.sin(a) ]);
+  f.water.push([pond]);
+  f.roads.push({ pts:[[px0,py0],[px1,py1]], w:2.6, small:true });
+  f.roads.push({ pts:[[px1,py0],[(px0+px1)/2+30,(py0+py1)/2-10]], w:2.6, small:true });
+  // Wäldchen am Rand
+  f.wood.push([[[-460,265+6],[xs[0]-6,265+6],[xs[0]-6,460],[-460,460]]]);
+  // Häuser entlang der Blockränder
+  for (let i=0; i<xs.length-1; i++){
+    for (let j=0; j<ys.length-1; j++){
+      if (i===4 && j===0) continue; // Park
+      const x0 = xs[i]+9, x1 = xs[i+1]-9, y0 = ys[j]+9, y1 = ys[j+1]-9;
+      const edges = [
+        { ax:x0, ay:y0, dx:1, dy:0, len:x1-x0, nx:0, ny:1 },
+        { ax:x0, ay:y1, dx:1, dy:0, len:x1-x0, nx:0, ny:-1 },
+        { ax:x0, ay:y0, dx:0, dy:1, len:y1-y0, nx:1, ny:0 },
+        { ax:x1, ay:y0, dx:0, dy:1, len:y1-y0, nx:-1, ny:0 }
+      ];
+      edges.forEach((e, ei) => {
+        let p = (ei>1) ? 14 : 0;
+        const end = e.len - ((ei>1) ? 14 : 0);
+        while (p < end-6){
+          const wdt = 8 + rnd()*9, dep = 9 + rnd()*5;
+          const a = Math.min(end, p+wdt);
+          const cx = e.ax + e.dx*(p+a)/2 + e.nx*dep/2, cy = e.ay + e.dy*(p+a)/2 + e.ny*dep/2;
+          if (Math.abs(cy - riverY(cx)) > 28 + dep && rnd() > 0.08){
+            const q = [
+              [e.ax+e.dx*p,           e.ay+e.dy*p],
+              [e.ax+e.dx*a,           e.ay+e.dy*a],
+              [e.ax+e.dx*a+e.nx*dep,  e.ay+e.dy*a+e.ny*dep],
+              [e.ax+e.dx*p+e.nx*dep,  e.ay+e.dy*p+e.ny*dep]
+            ];
+            f.buildings.push([q]);
+          }
+          p = a + (rnd() < 0.35 ? 3 + rnd()*5 : 0.5);
+        }
+      });
+      // Gartenmauer quer durch manche Höfe
+      if (rnd() < 0.25) f.barriers.push({ pts:[[x0+22,(y0+y1)/2],[x1-22,(y0+y1)/2]], w:1 });
+    }
+  }
+  return f;
+}
+
+/* =====================================================================
+   3) RASTER: wo darf man laufen?
+   base: 0 = blockiert (Haus, Wasser, Wand), 1 = Freifläche, 2 = Straße
+   ===================================================================== */
+function makeCanvas(w, h){
+  const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
+}
+function tracePoly(c, rings){
+  for (const r of rings){
+    c.moveTo(r[0][0], r[0][1]);
+    for (let i=1; i<r.length; i++) c.lineTo(r[i][0], r[i][1]);
+    c.closePath();
+  }
+}
+function traceLine(c, pts){
+  c.moveTo(pts[0][0], pts[0][1]);
+  for (let i=1; i<pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+}
+
+function rasterize(f, size){
+  const W = Math.round(size/CELL), N = W*W;
+  const toCells = c => c.setTransform(1/CELL, 0, 0, 1/CELL, W/2, W/2);
+
+  // a) Hindernisse schwarz auf weiß, danach Straßen/Brücken wieder frei malen
+  const oc = makeCanvas(W, W), o = oc.getContext('2d', { willReadFrequently:true });
+  o.fillStyle = '#fff'; o.fillRect(0, 0, W, W);
+  toCells(o);
+  o.lineCap = 'round'; o.lineJoin = 'round';
+  o.fillStyle = '#000'; o.strokeStyle = '#000';
+  f.water.forEach(p => { o.beginPath(); tracePoly(o, p); o.fill('evenodd'); });
+  f.waterLines.forEach(l => { o.lineWidth = l.w; o.beginPath(); traceLine(o, l.pts); o.stroke(); });
+  f.buildings.forEach(p => { o.beginPath(); tracePoly(o, p); o.fill('evenodd'); });
+  f.barriers.forEach(b => { o.lineWidth = Math.max(b.w, CELL*1.1); o.beginPath(); traceLine(o, b.pts); o.stroke(); });
+  o.fillStyle = '#fff'; o.strokeStyle = '#fff';
+  f.roadAreas.forEach(p => { o.beginPath(); tracePoly(o, p); o.fill('evenodd'); });
+  f.roads.forEach(r => { if (r.tunnel) return; o.lineWidth = Math.max(2.4, Math.min(r.w*0.7, 5)); o.beginPath(); traceLine(o, r.pts); o.stroke(); });
+  const od = o.getImageData(0, 0, W, W).data;
+
+  // b) Straßenmaske
+  const rc = makeCanvas(W, W), r = rc.getContext('2d', { willReadFrequently:true });
+  r.fillStyle = '#000'; r.fillRect(0, 0, W, W);
+  toCells(r);
+  r.lineCap = 'round'; r.lineJoin = 'round'; r.fillStyle = '#fff'; r.strokeStyle = '#fff';
+  f.roadAreas.forEach(p => { r.beginPath(); tracePoly(r, p); r.fill('evenodd'); });
+  f.roads.forEach(x => { if (x.tunnel) return; r.lineWidth = x.w*0.85; r.beginPath(); traceLine(r, x.pts); r.stroke(); });
+  const rd = r.getImageData(0, 0, W, W).data;
+
+  const base = new Uint8Array(N);
+  for (let i=0; i<N; i++){
+    if (od[i*4] < 140) base[i] = 0;
+    else base[i] = rd[i*4] > 110 ? 2 : 1;
+  }
+  return { W, base };
+}
+
+// Größte zusammenhängende Lauffläche finden (nur dort entstehen Menschen)
+function largestComponent(W, block){
+  const N = W*W;
+  const label = new Int32Array(N);
+  const q = new Int32Array(N);
+  let best = 0, bestSize = 0, cur = 0;
+  for (let s=0; s<N; s++){
+    if (block[s] || label[s]) continue;
+    cur++;
+    let qh = 0, qt = 0; q[qt++] = s; label[s] = cur;
+    while (qh < qt){
+      const i = q[qh++], x = i % W, y = (i / W) | 0;
+      if (x > 0     && !block[i-1] && !label[i-1]){ label[i-1] = cur; q[qt++] = i-1; }
+      if (x < W-1   && !block[i+1] && !label[i+1]){ label[i+1] = cur; q[qt++] = i+1; }
+      if (y > 0     && !block[i-W] && !label[i-W]){ label[i-W] = cur; q[qt++] = i-W; }
+      if (y < W-1   && !block[i+W] && !label[i+W]){ label[i+W] = cur; q[qt++] = i+W; }
+    }
+    if (qt > bestSize){ bestSize = qt; best = cur; }
+  }
+  return { label, best, bestSize };
+}
+
+/* =====================================================================
+   4) KARTENBILD (einmal gezeichnet, dann nur noch verschoben/gezoomt)
+   ===================================================================== */
+function renderCache(f, size){
+  const s = Math.min(3, 2800/size);           // Pixel pro Meter im Cache
+  const px = Math.round(size*s);
+  const c = makeCanvas(px, px), g = c.getContext('2d');
+  g.fillStyle = COL.ground; g.fillRect(0, 0, px, px);
+  g.setTransform(s, 0, 0, s, px/2, px/2);
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  // jede Fläche einzeln füllen, damit sich überlappende Flächen nicht gegenseitig aushöhlen
+  const fill = (list, col) => { g.fillStyle = col; list.forEach(p => { g.beginPath(); tracePoly(g, p); g.fill('evenodd'); }); };
+
+  fill(f.green, COL.green);
+  fill(f.wood, COL.wood);
+
+  // 100-m-Gitter
+  g.strokeStyle = COL.grid; g.lineWidth = 1/s; g.beginPath();
+  for (let v = -Math.floor(size/200)*100; v <= size/2; v += 100){
+    g.moveTo(v, -size/2); g.lineTo(v, size/2); g.moveTo(-size/2, v); g.lineTo(size/2, v);
+  }
+  g.stroke();
+
+  // Wasser mit Uferlinie
+  g.strokeStyle = COL.waterEdge;
+  f.waterLines.forEach(l => { g.lineWidth = l.w + 1.6; g.beginPath(); traceLine(g, l.pts); g.stroke(); });
+  g.lineWidth = 1.6; g.beginPath(); f.water.forEach(p => tracePoly(g, p)); g.stroke();
+  g.strokeStyle = COL.water;
+  f.waterLines.forEach(l => { g.lineWidth = l.w; g.beginPath(); traceLine(g, l.pts); g.stroke(); });
+  fill(f.water, COL.water);
+
+  // Bahn
+  g.strokeStyle = COL.rail; g.lineWidth = 1.4; g.setLineDash([4, 3]);
+  g.beginPath(); f.rails.forEach(p => traceLine(g, p)); g.stroke(); g.setLineDash([]);
+
+  // Straßen: erst Kontur, dann Fläche (kleine zuerst, große obenauf)
+  const roads = f.roads.filter(r => !r.tunnel).sort((a, b) => a.w - b.w);
+  fill(f.roadAreas, COL.road);
+  g.strokeStyle = COL.roadCase;
+  roads.forEach(r => { if (r.small) return; g.lineWidth = r.w + 1.4; g.beginPath(); traceLine(g, r.pts); g.stroke(); });
+  roads.forEach(r => {
+    g.strokeStyle = r.small ? COL.path : r.major ? COL.roadMajor : COL.road;
+    g.lineWidth = r.small ? Math.max(1.6, r.w*0.75) : r.w;
+    g.beginPath(); traceLine(g, r.pts); g.stroke();
+  });
+
+  // Mauern/Zäune aus OSM
+  g.strokeStyle = COL.barrier; g.lineWidth = 0.9;
+  g.beginPath(); f.barriers.forEach(b => traceLine(g, b.pts)); g.stroke();
+
+  // Häuser
+  fill(f.buildings, COL.bldg);
+  g.strokeStyle = COL.bldgEdge; g.lineWidth = Math.max(0.5, 0.9/s);
+  g.beginPath(); f.buildings.forEach(p => tracePoly(g, p)); g.stroke();
+  return c;
+}
+
+/* =====================================================================
+   5) SPIELZUSTAND
+   ===================================================================== */
+let G = null;               // aktuelles Spiel
+let lastMap = null;         // { f, size, name } für Neustart
+let tool = 'outbreak', running = true, speedIdx = 0;
+const cam = { x:0, y:0, s:1, fit:1 };
+const DX = [1,-1,0,0,1,1,-1,-1], DY = [0,0,1,-1,1,-1,1,-1];
+
+function newGame(f, size, name, humans){
+  const { W, base } = rasterize(f, size);
+  const N = W*W;
+  const block = new Uint8Array(N);
+  for (let i=0; i<N; i++) block[i] = base[i]===0 ? 1 : 0;
+  const comp = largestComponent(W, block);
+  if (comp.bestSize < 200) throw new Error('Hier gibt es kaum begehbare Wege. Wähle einen anderen Ort.');
+  const roadCells = [], openCells = [];
+  for (let i=0; i<N; i++){
+    if (comp.label[i] !== comp.best) continue;
+    (base[i]===2 ? roadCells : openCells).push(i);
+  }
+  const g = {
+    f, size, half:size/2, name, W, N, base, block,
+    wallCount: new Uint8Array(N),
+    roadCells: Int32Array.from(roadCells), openCells: Int32Array.from(openCells),
+    distH: new Int16Array(N), distZ: new Int16Array(N), queue: new Int32Array(N),
+    agents: [], walls: [], corpses: [], fx: [], tracers: [],
+    time: 0, fieldT: 0, started: false, ended: false, kills: 0, maxZ: 0, humans0: 0,
+    hashSize: 4, hashW: Math.ceil(size/4), head: null, next: null,
+    cache: renderCache(f, size)
+  };
+  g.head = new Int32Array(g.hashW*g.hashW);
+  G = g;
+  spawnHumans(humans);
+  return g;
+}
+
+function spawnHumans(n){
+  const g = G;
+  const total = g.roadCells.length + g.openCells.length;
+  n = Math.min(n, Math.floor(total/3));
+  for (let k=0; k<n; k++){
+    const useRoad = g.roadCells.length && (rand() < 0.78 || !g.openCells.length);
+    const arr = useRoad ? g.roadCells : g.openCells;
+    const i = arr[(rand()*arr.length)|0];
+    const [x, y] = cellCenter(i);
+    const a = { t:H, x: x+(rand()-0.5)*CELL*0.8, y: y+(rand()-0.5)*CELL*0.8, h: rand()*TAU, turn: rand()*3, idle: rand()<0.2 ? rand()*6 : 0, alive:true };
+    g.agents.push(a);
+  }
+  g.humans0 = n;
+}
+
+function resetGame(){
+  if (!lastMap) return;
+  G.agents = []; G.corpses = []; G.fx = []; G.tracers = [];
+  G.walls = []; G.wallCount.fill(0);
+  for (let i=0; i<G.N; i++) G.block[i] = G.base[i]===0 ? 1 : 0;
+  G.time = 0; G.fieldT = 0; G.started = false; G.ended = false; G.kills = 0; G.maxZ = 0;
+  spawnHumans(lastMap.humans);
+  setTool('outbreak');
+  running = true; syncPlay();
+}
+
+// Raster-Helfer
+const cellIndex = (x, y) => {
+  const ix = Math.floor((x + G.half)/CELL), iy = Math.floor((y + G.half)/CELL);
+  if (ix < 0 || iy < 0 || ix >= G.W || iy >= G.W) return -1;
+  return iy*G.W + ix;
+};
+const cellCenter = i => [ (i % G.W + 0.5)*CELL - G.half, (((i / G.W) | 0) + 0.5)*CELL - G.half ];
+const free = (x, y) => { const i = cellIndex(x, y); return i >= 0 && !G.block[i]; };
+
+function nearestFree(x, y, maxR = 15){
+  const W = G.W;
+  const cx = Math.floor((x + G.half)/CELL), cy = Math.floor((y + G.half)/CELL);
+  for (let r=0; r<=maxR; r++){
+    let best = -1, bd = 1e9;
+    for (let dy=-r; dy<=r; dy++) for (let dx=-r; dx<=r; dx++){
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const ix = cx+dx, iy = cy+dy;
+      if (ix < 0 || iy < 0 || ix >= W || iy >= W) continue;
+      const i = iy*W+ix;
+      if (G.block[i]) continue;
+      const d = dx*dx+dy*dy;
+      if (d < bd){ bd = d; best = i; }
+    }
+    if (best >= 0) return best;
+  }
+  return -1;
+}
+
+/* =====================================================================
+   6) WEGFELDER (Breitensuche über das Raster)
+   distH: Laufweg-Abstand zum nächsten Menschen/Soldaten (für Zombies)
+   distZ: Laufweg-Abstand zum nächsten Zombie (für fliehende Menschen)
+   ===================================================================== */
+function bfs(dist, type, cutoff){
+  const g = G, W = g.W, block = g.block, q = g.queue;
+  dist.fill(INF);
+  let qh = 0, qt = 0;
+  for (const a of g.agents){
+    if (!a.alive) continue;
+    if (type === Z ? a.t !== Z : a.t === Z) continue;
+    const i = cellIndex(a.x, a.y);
+    if (i < 0 || block[i] || dist[i] === 0) continue;
+    dist[i] = 0; q[qt++] = i;
+  }
+  while (qh < qt){
+    const i = q[qh++], d = dist[i];
+    if (d >= cutoff) continue;
+    const x = i % W, y = (i / W) | 0;
+    for (let k=0; k<8; k++){
+      const nx = x + DX[k], ny = y + DY[k];
+      if (nx < 0 || ny < 0 || nx >= W || ny >= W) continue;
+      const j = ny*W + nx;
+      if (dist[j] !== INF || block[j]) continue;
+      if (k >= 4 && (block[y*W+nx] || block[ny*W+x])) continue;   // keine Ecken schneiden
+      dist[j] = d + 1; q[qt++] = j;
+    }
+  }
+}
+
+function updateFields(){
+  bfs(G.distH, H, ZOMBIE_SENSE + 2);
+  bfs(G.distZ, Z, HUMAN_FEAR + 2);
+}
+
+// Nachbarzelle mit bestem Feldwert (min für Jagd, max für Flucht)
+function bestNeighbor(dist, i, wantMax){
+  const g = G, W = g.W, block = g.block;
+  const x = i % W, y = (i / W) | 0;
+  let best = -1, bv = wantMax ? -1 : INF + 1;
+  for (let k=0; k<8; k++){
+    const nx = x + DX[k], ny = y + DY[k];
+    if (nx < 0 || ny < 0 || nx >= W || ny >= W) continue;
+    const j = ny*W + nx;
+    if (block[j]) continue;
+    if (k >= 4 && (block[y*W+nx] || block[ny*W+x])) continue;
+    const v = dist[j] + (k >= 4 ? 0.4 : 0) * (wantMax ? -1 : 1);   // gerade Schritte leicht bevorzugen
+    if (wantMax ? v > bv : v < bv){ bv = v; best = j; }
+  }
+  return best;
+}
+
+/* =====================================================================
+   7) BEWEGUNG
+   ===================================================================== */
+function moveBy(a, dx, dy){
+  // Steht der Agent in einer gerade gebauten Mauer, darf er sich herausbewegen
+  if (!free(a.x, a.y)){
+    a.x = Math.max(-G.half+0.1, Math.min(G.half-0.1, a.x + dx));
+    a.y = Math.max(-G.half+0.1, Math.min(G.half-0.1, a.y + dy));
+    return true;
+  }
+  let ok = true;
+  if (free(a.x + dx, a.y)) a.x += dx; else ok = false;
+  if (free(a.x, a.y + dy)) a.y += dy; else ok = false;
+  return ok;
+}
+
+function steerTo(a, tx, ty, speed, dt){
+  const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1;
+  a.h = Math.atan2(dy, dx);
+  const st = Math.min(d, speed*dt);
+  return moveBy(a, dx/d*st, dy/d*st);
+}
+
+function pickHeading(a, roadPref){
+  let best = -1e9, bestH = a.h;
+  for (let k=0; k<10; k++){
+    const h = k===0 ? a.h : (k < 4 ? a.h + (rand()-0.5)*1.6 : rand()*TAU);
+    const cx = Math.cos(h), cy = Math.sin(h);
+    if (!free(a.x + cx*2.5, a.y + cy*2.5)) continue;
+    let sc = rand()*1.1 + Math.cos(h - a.h)*0.9;
+    const fx = a.x + cx*9, fy = a.y + cy*9;
+    const j = cellIndex(fx, fy);
+    if (j < 0 || G.block[j]) sc -= 1.2;
+    else if (roadPref && G.base[j] === 2) sc += 1.6;
+    if (sc > best){ best = sc; bestH = h; }
+  }
+  if (best === -1e9) bestH = rand()*TAU;
+  a.h = bestH;
+  a.turn = roadPref ? 3 + rand()*6 : 1.5 + rand()*3;
+}
+
+function wander(a, speed, dt, roadPref){
+  a.turn -= dt;
+  if (a.turn <= 0) pickHeading(a, roadPref);
+  const ok = moveBy(a, Math.cos(a.h)*speed*dt, Math.sin(a.h)*speed*dt);
+  if (!ok) pickHeading(a, roadPref);
+}
+
+function updHuman(a, dt){
+  const i = cellIndex(a.x, a.y);
+  if (i >= 0 && G.started && G.distZ[i] < HUMAN_FEAR){
+    a.idle = 0;
+    const j = bestNeighbor(G.distZ, i, true);
+    if (j >= 0 && G.distZ[j] > G.distZ[i]){
+      const [tx, ty] = cellCenter(j);
+      steerTo(a, tx + (rand()-0.5)*0.6, ty + (rand()-0.5)*0.6, HUMAN_SPEED, dt);
+      a.turn = 0.5;
+      return;
+    }
+  }
+  if (a.idle > 0){ a.idle -= dt; return; }
+  if (rand() < dt*0.012) a.idle = 2 + rand()*8;      // ab und zu stehen bleiben
+  wander(a, HUMAN_SPEED, dt, true);
+}
+
+function updZombie(a, dt){
+  const i = cellIndex(a.x, a.y);
+  const d = i >= 0 ? G.distH[i] : INF;
+  if (d <= 3){
+    const p = nearestPrey(a.x, a.y, 9);
+    if (p){ steerTo(a, p.x, p.y, ZOMBIE_SPEED, dt); return; }
+  }
+  if (d < ZOMBIE_SENSE){
+    const j = bestNeighbor(G.distH, i, false);
+    if (j >= 0 && G.distH[j] < d){
+      const [tx, ty] = cellCenter(j);
+      steerTo(a, tx, ty, ZOMBIE_SPEED, dt);
+      return;
+    }
+  }
+  wander(a, ZOMBIE_SPEED, dt, false);
+}
+
+function updSoldier(a, dt, zombies){
+  a.cd -= dt;
+  if (a.cd > 0) return;
+  let best = null, bd = SOLDIER_RANGE*SOLDIER_RANGE;
+  for (const z of zombies){
+    if (!z.alive) continue;
+    const dx = z.x - a.x, dy = z.y - a.y, d2 = dx*dx + dy*dy;
+    if (d2 < bd && lineOfSight(a.x, a.y, z.x, z.y)){ bd = d2; best = z; }
+  }
+  if (!best){ a.cd = 0.25; return; }
+  a.cd = SOLDIER_COOLDOWN;
+  a.h = Math.atan2(best.y - a.y, best.x - a.x);
+  const hit = rand() < SOLDIER_HIT;
+  G.tracers.push({ x0:a.x, y0:a.y, x1:best.x, y1:best.y, t:performance.now(), hit });
+  if (hit){
+    best.alive = false; G.kills++;
+    G.corpses.push({ x:best.x, y:best.y });
+    if (G.corpses.length > 600) G.corpses.shift();
+  }
+}
+
+function lineOfSight(x0, y0, x1, y1){
+  const d = Math.hypot(x1-x0, y1-y0), n = Math.ceil(d/(CELL*0.5));
+  for (let k=1; k<n; k++){
+    const t = k/n;
+    const i = cellIndex(x0 + (x1-x0)*t, y0 + (y1-y0)*t);
+    if (i < 0 || (G.base[i] === 0 || G.wallCount[i])) return false;
+  }
+  return true;
+}
+
+// Räumliches Gitter für Beute (Menschen + Soldaten)
+function buildPreyHash(){
+  const g = G, hs = g.hashSize, hw = g.hashW;
+  if (!g.next || g.next.length < g.agents.length) g.next = new Int32Array(Math.max(1024, g.agents.length*2));
+  g.head.fill(-1);
+  for (let k=0; k<g.agents.length; k++){
+    const a = g.agents[k];
+    if (!a.alive || a.t === Z) continue;
+    const bx = Math.min(hw-1, Math.max(0, Math.floor((a.x + g.half)/hs)));
+    const by = Math.min(hw-1, Math.max(0, Math.floor((a.y + g.half)/hs)));
+    const b = by*hw + bx;
+    g.next[k] = g.head[b]; g.head[b] = k;
+  }
+}
+
+function nearestPrey(x, y, maxD){
+  const g = G, hs = g.hashSize, hw = g.hashW;
+  const r = Math.ceil(maxD/hs);
+  const bx = Math.floor((x + g.half)/hs), by = Math.floor((y + g.half)/hs);
+  let best = null, bd = maxD*maxD;
+  for (let yy=by-r; yy<=by+r; yy++){
+    if (yy < 0 || yy >= hw) continue;
+    for (let xx=bx-r; xx<=bx+r; xx++){
+      if (xx < 0 || xx >= hw) continue;
+      for (let k = g.head[yy*hw+xx]; k !== -1; k = g.next[k]){
+        const p = g.agents[k];
+        if (!p.alive || p.t === Z) continue;
+        const dx = p.x - x, dy = p.y - y, d2 = dx*dx + dy*dy;
+        if (d2 < bd){ bd = d2; best = p; }
+      }
+    }
+  }
+  return best;
+}
+
+function bites(zombies){
+  const g = G, hs = g.hashSize, hw = g.hashW, b2 = BITE_DIST*BITE_DIST;
+  const now = performance.now();
+  for (const z of zombies){
+    if (!z.alive) continue;
+    const bx = Math.floor((z.x + g.half)/hs), by = Math.floor((z.y + g.half)/hs);
+    for (let yy=by-1; yy<=by+1; yy++){
+      if (yy < 0 || yy >= hw) continue;
+      for (let xx=bx-1; xx<=bx+1; xx++){
+        if (xx < 0 || xx >= hw) continue;
+        for (let k = g.head[yy*hw+xx]; k !== -1; k = g.next[k]){
+          const p = g.agents[k];
+          if (!p.alive || p.t === Z) continue;
+          const dx = p.x - z.x, dy = p.y - z.y;
+          if (dx*dx + dy*dy < b2){
+            p.t = Z; p.h = rand()*TAU; p.turn = 0; p.idle = 0;
+            g.fx.push({ x:p.x, y:p.y, t:now });
+          }
+        }
+      }
+    }
+  }
+}
+
+function step(dt){
+  const g = G;
+  const zombies = [];
+  for (const a of g.agents) if (a.alive && a.t === Z) zombies.push(a);
+  buildPreyHash();
+  for (const a of g.agents){
+    if (!a.alive) continue;
+    if (a.t === H) updHuman(a, dt);
+    else if (a.t === Z) updZombie(a, dt);
+    else updSoldier(a, dt, zombies);
+  }
+  bites(zombies);
+  if (g.kills !== g._lastKills){
+    g.agents = g.agents.filter(a => a.alive);
+    g._lastKills = g.kills;
+  }
+}
+
+/* =====================================================================
+   8) BAUEN: Ausbruch, Mauern, Soldaten, Abriss
+   ===================================================================== */
+function placeOutbreak(wx, wy){
+  const i = nearestFree(wx, wy);
+  if (i < 0){ flashHint('Dort ist kein begehbarer Boden. Tippe auf eine Straße.'); return; }
+  const [cx, cy] = cellCenter(i);
+  const now = performance.now();
+  for (let k=0; k<3; k++){
+    let x = cx, y = cy;
+    for (let t=0; t<8; t++){
+      const nx = cx + (rand()-0.5)*5, ny = cy + (rand()-0.5)*5;
+      if (free(nx, ny)){ x = nx; y = ny; break; }
+    }
+    G.agents.push({ t:Z, x, y, h:rand()*TAU, turn:0, idle:0, alive:true });
+  }
+  G.fx.push({ x:cx, y:cy, t:now, big:true });
+  G.started = true; G.ended = false;
+  G.fieldT = 0;
+  setTool('pan');
+  flashHint('Ausbruch! Baue Mauern und postiere Soldaten.');
+}
+
+function placeSoldier(wx, wy){
+  const i = nearestFree(wx, wy, 6);
+  if (i < 0){ flashHint('Soldaten brauchen begehbaren Boden.'); return; }
+  const [cx, cy] = cellCenter(i);
+  G.agents.push({ t:S, x:cx, y:cy, h:-Math.PI/2, cd:0, alive:true });
+  G.fieldT = 0;
+}
+
+function addWall(pts){
+  if (pts.length < 2) return;
+  let len = 0;
+  for (let k=1; k<pts.length; k++) len += Math.hypot(pts[k][0]-pts[k-1][0], pts[k][1]-pts[k-1][1]);
+  if (len < 3) return;
+  const set = new Set();
+  const W = G.W, rc = Math.ceil(WALL_THICK/CELL)+1;
+  for (let k=1; k<pts.length; k++){
+    const [x0, y0] = pts[k-1], [x1, y1] = pts[k];
+    const n = Math.max(1, Math.ceil(Math.hypot(x1-x0, y1-y0)/0.5));
+    for (let s=0; s<=n; s++){
+      const x = x0 + (x1-x0)*s/n, y = y0 + (y1-y0)*s/n;
+      const cx = Math.floor((x + G.half)/CELL), cy = Math.floor((y + G.half)/CELL);
+      for (let dy=-rc; dy<=rc; dy++) for (let dx=-rc; dx<=rc; dx++){
+        const ix = cx+dx, iy = cy+dy;
+        if (ix < 0 || iy < 0 || ix >= W || iy >= W) continue;
+        const mx = (ix+0.5)*CELL - G.half, my = (iy+0.5)*CELL - G.half;
+        if (Math.hypot(mx-x, my-y) <= WALL_THICK) set.add(iy*W+ix);
+      }
+    }
+  }
+  const cells = Int32Array.from(set);
+  cells.forEach(i => { G.wallCount[i]++; G.block[i] = 1; });
+  G.walls.push({ pts, cells, len });
+  G.fieldT = 0;
+}
+
+function removeWall(w){
+  w.cells.forEach(i => { G.wallCount[i]--; if (!G.wallCount[i] && G.base[i] !== 0) G.block[i] = 0; });
+  G.walls.splice(G.walls.indexOf(w), 1);
+  G.fieldT = 0;
+}
+
+function eraseAt(wx, wy){
+  const reach = Math.max(5, 22/cam.s);
+  let bestS = null, bs = reach*reach;
+  for (const a of G.agents){
+    if (!a.alive || a.t !== S) continue;
+    const d2 = (a.x-wx)**2 + (a.y-wy)**2;
+    if (d2 < bs){ bs = d2; bestS = a; }
+  }
+  if (bestS){ bestS.alive = false; G.agents = G.agents.filter(a => a.alive); G.fieldT = 0; return; }
+  let bestW = null, bw = reach;
+  for (const w of G.walls){
+    for (let k=1; k<w.pts.length; k++){
+      const d = segDist(wx, wy, w.pts[k-1], w.pts[k]);
+      if (d < bw){ bw = d; bestW = w; }
+    }
+  }
+  if (bestW) removeWall(bestW);
+  else flashHint('Hier ist keine Mauer und kein Soldat.');
+}
+
+function segDist(px, py, a, b){
+  const vx = b[0]-a[0], vy = b[1]-a[1], l2 = vx*vx + vy*vy || 1;
+  const t = Math.max(0, Math.min(1, ((px-a[0])*vx + (py-a[1])*vy)/l2));
+  return Math.hypot(px - (a[0]+vx*t), py - (a[1]+vy*t));
+}
+
+/* =====================================================================
+   9) ZEICHNEN
+   ===================================================================== */
+function render(now){
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = COL.void; ctx.fillRect(0, 0, VW, VH);
+  if (!G) return;
+  const s = cam.s;
+  ctx.setTransform(dpr*s, 0, 0, dpr*s, dpr*cam.x, dpr*cam.y);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(G.cache, -G.half, -G.half, G.size, G.size);
+  ctx.strokeStyle = COL.frame; ctx.lineWidth = 1.5/s;
+  ctx.strokeRect(-G.half, -G.half, G.size, G.size);
+
+  // sichtbarer Ausschnitt in Metern (zum Aussortieren)
+  const vx0 = -cam.x/s - 10, vy0 = -cam.y/s - 10, vx1 = (VW-cam.x)/s + 10, vy1 = (VH-cam.y)/s + 10;
+  const vis = a => a.x > vx0 && a.x < vx1 && a.y > vy0 && a.y < vy1;
+  const r = Math.max(0.8, 2.1/s);
+
+  // Mauern
+  if (G.walls.length || wallDraft){
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const ww = Math.max(WALL_THICK*2, 3.5/s);
+    ctx.strokeStyle = COL.wallEdge; ctx.lineWidth = ww + 1.6/s;
+    ctx.beginPath(); G.walls.forEach(w => traceLine(ctx, w.pts)); ctx.stroke();
+    ctx.strokeStyle = COL.wall; ctx.lineWidth = ww;
+    ctx.beginPath(); G.walls.forEach(w => traceLine(ctx, w.pts)); ctx.stroke();
+    if (wallDraft && wallDraft.length > 1){
+      ctx.setLineDash([3, 2]); ctx.globalAlpha = 0.75;
+      ctx.strokeStyle = COL.wall; ctx.lineWidth = ww;
+      ctx.beginPath(); traceLine(ctx, wallDraft); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+    }
+  }
+
+  // Erledigte Zombies
+  if (G.corpses.length){
+    ctx.fillStyle = COL.corpse; ctx.beginPath();
+    const cr = r*0.8;
+    for (const c of G.corpses){ ctx.moveTo(c.x + cr, c.y); ctx.arc(c.x, c.y, cr, 0, TAU); }
+    ctx.fill();
+  }
+
+  const hs = [], zs = [], ss = [];
+  for (const a of G.agents){ if (!a.alive || !vis(a)) continue; (a.t === H ? hs : a.t === Z ? zs : ss).push(a); }
+
+  // Reichweite der Soldaten beim Bauen
+  if ((tool === 'soldier' || tool === 'erase') && ss.length){
+    ctx.strokeStyle = 'rgba(255,180,58,0.28)'; ctx.fillStyle = 'rgba(255,180,58,0.05)'; ctx.lineWidth = 1/s;
+    ctx.beginPath(); ss.forEach(a => { ctx.moveTo(a.x + SOLDIER_RANGE, a.y); ctx.arc(a.x, a.y, SOLDIER_RANGE, 0, TAU); }); ctx.fill(); ctx.stroke();
+  }
+
+  // Zombie-Schein
+  ctx.fillStyle = COL.zombieGlow; ctx.beginPath();
+  for (const a of zs){ ctx.moveTo(a.x + r*2.6, a.y); ctx.arc(a.x, a.y, r*2.6, 0, TAU); }
+  ctx.fill();
+  // Menschen
+  ctx.fillStyle = COL.human; ctx.beginPath();
+  for (const a of hs){ ctx.moveTo(a.x + r, a.y); ctx.arc(a.x, a.y, r, 0, TAU); }
+  ctx.fill();
+  // Zombies
+  ctx.fillStyle = COL.zombie; ctx.beginPath();
+  for (const a of zs){ ctx.moveTo(a.x + r, a.y); ctx.arc(a.x, a.y, r, 0, TAU); }
+  ctx.fill();
+  // Soldaten
+  if (ss.length){
+    const sr = r*1.45;
+    ctx.fillStyle = COL.soldier; ctx.strokeStyle = COL.soldierRing; ctx.lineWidth = Math.max(0.3, 1/s);
+    ctx.beginPath();
+    for (const a of ss){ ctx.moveTo(a.x + sr, a.y); ctx.arc(a.x, a.y, sr, 0, TAU); }
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = COL.soldier; ctx.lineWidth = Math.max(0.4, 1.4/s); ctx.beginPath();
+    for (const a of ss){ ctx.moveTo(a.x + Math.cos(a.h)*sr, a.y + Math.sin(a.h)*sr); ctx.lineTo(a.x + Math.cos(a.h)*sr*2.2, a.y + Math.sin(a.h)*sr*2.2); }
+    ctx.stroke();
+  }
+
+  // Schüsse
+  if (G.tracers.length){
+    G.tracers = G.tracers.filter(t => now - t.t < 160);
+    ctx.lineWidth = Math.max(0.25, 1.2/s);
+    for (const t of G.tracers){
+      ctx.strokeStyle = `rgba(255,214,140,${(1 - (now - t.t)/160).toFixed(2)})`;
+      ctx.beginPath(); ctx.moveTo(t.x0, t.y0); ctx.lineTo(t.x1, t.y1); ctx.stroke();
+    }
+  }
+  // Ansteckungen
+  if (G.fx.length){
+    G.fx = G.fx.filter(e => now - e.t < (e.big ? 1600 : 700));
+    for (const e of G.fx){
+      const life = e.big ? 1600 : 700, p = (now - e.t)/life;
+      const rr = e.big ? r*3 + p*40 : r + p*r*6;
+      ctx.strokeStyle = `rgba(92,255,122,${(1-p).toFixed(2)})`;
+      ctx.lineWidth = (e.big ? 2.5 : 1.4)/s;
+      ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, TAU); ctx.stroke();
+    }
+  }
+}
+
+/* =====================================================================
+   10) KAMERA & EINGABE
+   ===================================================================== */
+function fitCamera(){
+  const avail = Math.min(VW - 20, VH - 250);
+  cam.fit = Math.max(0.05, avail / G.size);
+  cam.s = cam.fit;
+  cam.x = VW/2; cam.y = VH/2 + 10;
+}
+function clampCam(){
+  if (!G) return;
+  cam.s = Math.max(cam.fit*0.6, Math.min(14, cam.s));
+  const m = 60;
+  const w = G.size*cam.s;
+  cam.x = Math.min(VW - m + w/2, Math.max(m - w/2, cam.x));
+  cam.y = Math.min(VH - m + w/2, Math.max(m - w/2, cam.y));
+}
+const toWorld = (sx, sy) => [ (sx - cam.x)/cam.s, (sy - cam.y)/cam.s ];
+
+const pointers = new Map();
+let gesture = null, wallDraft = null;
+
+cv.addEventListener('pointerdown', e => {
+  if (!G) return;
+  cv.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  if (pointers.size === 1){
+    gesture = { mode: tool === 'wall' ? 'draw' : 'pan', sx:e.clientX, sy:e.clientY, lx:e.clientX, ly:e.clientY, moved:false };
+    if (gesture.mode === 'draw') wallDraft = [toWorld(e.clientX, e.clientY)];
+  } else if (pointers.size === 2){
+    wallDraft = null;
+    const [p1, p2] = [...pointers.values()];
+    gesture = { mode:'pinch', d0: Math.hypot(p2.x-p1.x, p2.y-p1.y) || 1, s0: cam.s,
+      mx:(p1.x+p2.x)/2, my:(p1.y+p2.y)/2, wx:((p1.x+p2.x)/2 - cam.x)/cam.s, wy:((p1.y+p2.y)/2 - cam.y)/cam.s, moved:true };
+  }
+});
+cv.addEventListener('pointermove', e => {
+  if (!G || !pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
+  if (!gesture) return;
+  if (gesture.mode === 'pinch' && pointers.size >= 2){
+    const [p1, p2] = [...pointers.values()];
+    const d = Math.hypot(p2.x-p1.x, p2.y-p1.y) || 1;
+    const mx = (p1.x+p2.x)/2, my = (p1.y+p2.y)/2;
+    cam.s = gesture.s0 * d / gesture.d0;
+    clampCam();
+    cam.x = mx - gesture.wx*cam.s; cam.y = my - gesture.wy*cam.s;
+    clampCam();
+  } else if (gesture.mode === 'pan'){
+    if (Math.hypot(e.clientX - gesture.sx, e.clientY - gesture.sy) > 7) gesture.moved = true;
+    if (gesture.moved){ cam.x += e.clientX - gesture.lx; cam.y += e.clientY - gesture.ly; clampCam(); }
+    gesture.lx = e.clientX; gesture.ly = e.clientY;
+  } else if (gesture.mode === 'draw' && wallDraft){
+    const p = toWorld(e.clientX, e.clientY), l = wallDraft[wallDraft.length-1];
+    if (Math.hypot(p[0]-l[0], p[1]-l[1]) > Math.max(1.5, 6/cam.s)) wallDraft.push(p);
+    gesture.moved = true;
+  }
+});
+function endPointer(e){
+  if (!pointers.has(e.pointerId)) return;
+  pointers.delete(e.pointerId);
+  if (!gesture) return;
+  if (gesture.mode === 'draw'){
+    if (wallDraft){
+      const p = toWorld(e.clientX, e.clientY), l = wallDraft[wallDraft.length-1];
+      if (Math.hypot(p[0]-l[0], p[1]-l[1]) > 0.5) wallDraft.push(p);
+      addWall(simplify(wallDraft));
+    }
+    wallDraft = null; gesture = null;
+  } else if (gesture.mode === 'pinch'){
+    if (pointers.size === 1){
+      const [p] = [...pointers.values()];
+      gesture = { mode:'pan', sx:p.x, sy:p.y, lx:p.x, ly:p.y, moved:true };
+    } else if (!pointers.size) gesture = null;
+  } else if (gesture.mode === 'pan'){
+    if (!gesture.moved && e.type === 'pointerup') tapAt(e.clientX, e.clientY);
+    gesture = null;
+  }
+}
+cv.addEventListener('pointerup', endPointer);
+cv.addEventListener('pointercancel', endPointer);
+cv.addEventListener('wheel', e => {
+  if (!G) return;
+  e.preventDefault();
+  const [wx, wy] = toWorld(e.clientX, e.clientY);
+  cam.s *= Math.exp(-e.deltaY*0.0015);
+  clampCam();
+  cam.x = e.clientX - wx*cam.s; cam.y = e.clientY - wy*cam.s;
+  clampCam();
+}, { passive:false });
+
+function tapAt(sx, sy){
+  const [wx, wy] = toWorld(sx, sy);
+  if (Math.abs(wx) > G.half || Math.abs(wy) > G.half) return;
+  if (tool === 'outbreak') placeOutbreak(wx, wy);
+  else if (tool === 'soldier') placeSoldier(wx, wy);
+  else if (tool === 'erase') eraseAt(wx, wy);
+}
+
+// Linie glätten: Punkte näher als 2 m zusammenfassen
+function simplify(pts){
+  const out = [pts[0]];
+  for (let k=1; k<pts.length; k++){
+    const l = out[out.length-1];
+    if (Math.hypot(pts[k][0]-l[0], pts[k][1]-l[1]) >= 2 || k === pts.length-1) out.push(pts[k]);
+  }
+  return out;
+}
+
+/* =====================================================================
+   11) OBERFLÄCHE
+   ===================================================================== */
+const HINTS = {
+  pan: 'Ziehen verschiebt die Karte, zwei Finger zoomen.',
+  outbreak: 'Tippe auf die Karte: Dort bricht das Virus aus.',
+  wall: 'Mit einem Finger eine Mauer ziehen. Zwei Finger verschieben die Karte.',
+  soldier: 'Tippe, um einen Soldaten zu postieren. Reichweite 30 m.',
+  erase: 'Tippe auf eine Mauer oder einen Soldaten, um sie zu entfernen.'
+};
+let hintTimer = 0;
+function setTool(t){
+  tool = t;
+  document.querySelectorAll('.tool[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+  $('#hint').textContent = HINTS[t];
+  clearTimeout(hintTimer);
+}
+function flashHint(msg){
+  $('#hint').textContent = msg;
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => { $('#hint').textContent = HINTS[tool]; }, 3200);
+}
+document.querySelectorAll('.tool[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+
+function syncPlay(){
+  const b = $('#playBtn');
+  b.querySelector('span').textContent = running ? 'Pause' : 'Weiter';
+  b.setAttribute('aria-label', running ? 'Pause' : 'Weiter');
+  b.querySelector('svg').innerHTML = running
+    ? '<rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/>'
+    : '<path d="M7 4.5v15l12.5-7.5z"/>';
+}
+$('#playBtn').addEventListener('click', () => { running = !running; syncPlay(); });
+$('#speedBtn').addEventListener('click', () => {
+  speedIdx = (speedIdx + 1) % SPEEDS.length;
+  $('#speedBtn strong').textContent = '×' + SPEEDS[speedIdx];
+});
+$('#menuBtn').addEventListener('click', openMenu);
+
+document.addEventListener('keydown', e => {
+  if (!G || $('#hud').hidden || e.target.tagName === 'INPUT') return;
+  if (e.key === ' '){ e.preventDefault(); running = !running; syncPlay(); }
+  const map = { '1':'pan', '2':'outbreak', '3':'wall', '4':'soldier', '5':'erase' };
+  if (map[e.key]) setTool(map[e.key]);
+  if (e.key === 'Escape'){ wallDraft = null; gesture = null; }
+});
+
+function fmtClock(sec){
+  const t = 6*3600 + sec, day = Math.floor(t/86400) + 1, r = t % 86400;
+  const hh = String(Math.floor(r/3600)).padStart(2, '0'), mm = String(Math.floor(r % 3600 / 60)).padStart(2, '0');
+  return `Tag ${day} · ${hh}:${mm}`;
+}
+function fmtDur(sec){
+  const h = Math.floor(sec/3600), m = Math.floor(sec % 3600 / 60);
+  return h ? `${h} h ${m} min` : `${m} min`;
+}
+
+function counts(){
+  let h = 0, z = 0, s = 0;
+  for (const a of G.agents){ if (!a.alive) continue; if (a.t === H) h++; else if (a.t === Z) z++; else s++; }
+  return { h, z, s };
+}
+
+let hudT = 0;
+function updateHud(now){
+  if (now - hudT < 200) return;
+  hudT = now;
+  const c = counts();
+  G.maxZ = Math.max(G.maxZ, c.z);
+  $('#cH').textContent = c.h; $('#cZ').textContent = c.z; $('#cS').textContent = c.s; $('#cK').textContent = G.kills;
+  const tot = c.h + c.z + c.s || 1;
+  $('#barH').style.width = (c.h/tot*100) + '%';
+  $('#barS').style.width = (c.s/tot*100) + '%';
+  $('#barZ').style.width = (c.z/tot*100) + '%';
+  $('#clock').textContent = fmtClock(G.time);
+  // Maßstab
+  const target = 90/cam.s;
+  const nice = [5,10,20,25,50,100,200,250,500,1000];
+  let m = nice[0]; for (const n of nice) if (n <= target) m = n;
+  $('#scale i').style.width = Math.round(m*cam.s) + 'px';
+  $('#scale span').textContent = m + ' m';
+  // Spielende
+  if (G.started && !G.ended && G.time > 1){
+    if (c.h + c.s === 0){ G.ended = true; endScreen(false, c); }
+    else if (c.z === 0){ G.ended = true; endScreen(true, c); }
+  }
+}
+
+function showModal(title, cls, text, stats, buttons){
+  const h = $('#mTitle'); h.textContent = title; h.className = cls || '';
+  $('#mText').textContent = text || ''; $('#mText').hidden = !text;
+  const dl = $('#mStats'); dl.innerHTML = ''; dl.hidden = !stats;
+  (stats || []).forEach(([k, v]) => {
+    const dt = document.createElement('dt'); dt.textContent = k;
+    const dd = document.createElement('dd'); dd.textContent = v;
+    dl.append(dt, dd);
+  });
+  const box = $('#mBtns'); box.innerHTML = '';
+  buttons.forEach(b => {
+    const el = document.createElement('button');
+    el.type = 'button'; el.className = 'btn ' + (b.cls || ''); el.textContent = b.label;
+    el.addEventListener('click', () => { $('#modal').hidden = true; b.fn && b.fn(); });
+    box.append(el);
+  });
+  $('#modal').hidden = false;
+  box.firstChild && box.firstChild.focus();
+}
+
+function openMenu(){
+  running = false; syncPlay();
+  const c = counts();
+  showModal('Pause', '', G.name, [
+    ['Spielzeit', fmtClock(G.time)],
+    ['Menschen', `${c.h} von ${G.humans0}`],
+    ['Zombies', String(c.z)],
+    ['Erledigt', String(G.kills)],
+    ['Mauern', `${Math.round(G.walls.reduce((s, w) => s + w.len, 0))} m`]
+  ], [
+    { label:'Weiter', cls:'primary', fn:() => { running = true; syncPlay(); } },
+    { label:'Neu starten, gleiche Karte', fn:() => resetGame() },
+    { label:'Anderen Ort wählen', cls:'ghost', fn:() => backToStart() }
+  ]);
+}
+
+function endScreen(won, c){
+  running = false; syncPlay();
+  const dur = fmtDur(G.time);
+  if (won) showModal('Ausbruch eingedämmt', 'win', `Alle Zombies sind erledigt. ${c.h} Menschen haben überlebt.`, [
+    ['Dauer', dur], ['Überlebende', `${c.h} von ${G.humans0}`], ['Zombies erledigt', String(G.kills)], ['Höchststand Zombies', String(G.maxZ)]
+  ], [
+    { label:'Weiter zuschauen', cls:'primary', fn:() => { running = true; syncPlay(); } },
+    { label:'Neu starten, gleiche Karte', fn:() => resetGame() },
+    { label:'Anderen Ort wählen', cls:'ghost', fn:() => backToStart() }
+  ]);
+  else showModal('Die Stadt ist gefallen', 'lose', `Kein Mensch ist mehr übrig. ${G.name} gehört den Zombies.`, [
+    ['Dauer', dur], ['Zombies erledigt', String(G.kills)], ['Höchststand Zombies', String(G.maxZ)]
+  ], [
+    { label:'Neu starten, gleiche Karte', cls:'primary', fn:() => resetGame() },
+    { label:'Weiter zuschauen', fn:() => { running = true; syncPlay(); } },
+    { label:'Anderen Ort wählen', cls:'ghost', fn:() => backToStart() }
+  ]);
+}
+
+function backToStart(){
+  running = false;
+  $('#hud').hidden = true; $('#dock').hidden = true;
+  $('#start').hidden = false;
+  setStatus('');
+}
+
+/* ---------- Startbildschirm ---------- */
+const popIn = $('#pop'), popOut = $('#popOut');
+popIn.addEventListener('input', () => { popOut.textContent = popIn.value; });
+function setStatus(msg, err){ const s = $('#status'); s.textContent = msg; s.classList.toggle('err', !!err); }
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+let busy = false;
+
+async function launch(getMap){
+  if (busy) return;
+  busy = true; $('#loadBtn').disabled = true; $('#demoBtn').disabled = true;
+  try {
+    const { f, size, name } = await getMap();
+    setStatus('Berechne Laufwege …'); await nextFrame();
+    const humans = +popIn.value;
+    newGame(f, size, name, humans);
+    lastMap = { f, size, name, humans };
+    $('#placeName').textContent = name;
+    $('#start').hidden = true; $('#hud').hidden = false; $('#dock').hidden = false;
+    fitCamera(); clampCam();
+    setTool('outbreak');
+    running = true; syncPlay();
+    setStatus('');
+    try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch(e){}
+  } catch(e){
+    setStatus(e.message || String(e), true);
+  } finally {
+    busy = false; $('#loadBtn').disabled = false; $('#demoBtn').disabled = false;
+  }
+}
+
+async function loadReal(lat, lon, name){
+  const size = +$('#area').value;
+  const key = `${lat.toFixed(4)},${lon.toFixed(4)},${size}`;
+  setStatus('Prüfe Zwischenspeicher …');
+  let f = await cacheGet(key);
+  if (!f){
+    const q = buildQuery(lat, lon, size);
+    const json = await fetchOverpass(q, i => setStatus(i ? `Lade Kartendaten (Ersatzserver ${i}) …` : 'Lade Straßen, Häuser und Gewässer von OpenStreetMap …'));
+    setStatus('Verarbeite Kartendaten …'); await nextFrame();
+    f = parseOSM(json, lat, lon);
+    if (!f.roads.length && !f.buildings.length) throw new Error('An diesem Ort gibt es keine Kartendaten. Wähle einen bewohnten Ort.');
+    cachePut(key, f);
+  }
+  return { f, size, name };
+}
+
+$('#loadBtn').addEventListener('click', () => launch(async () => {
+  const q = $('#q').value.trim();
+  if (!q) throw new Error('Gib einen Ort ein, z. B. „Obertshausen“ oder „Römerberg, Frankfurt“.');
+  setStatus('Suche Ort …');
+  const g = await geocode(q);
+  return loadReal(g.lat, g.lon, g.name);
+}));
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') $('#loadBtn').click(); });
+
+$('#geoBtn').addEventListener('click', () => {
+  if (!navigator.geolocation){ setStatus('Dieses Gerät gibt keinen Standort heraus.', true); return; }
+  setStatus('Bestimme Standort …');
+  navigator.geolocation.getCurrentPosition(p => {
+    const lat = p.coords.latitude, lon = p.coords.longitude;
+    $('#q').value = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+    launch(() => loadReal(lat, lon, 'Dein Standort'));
+  }, err => {
+    setStatus(err.code === 1 ? 'Standortzugriff wurde abgelehnt. Gib den Ort von Hand ein.' : 'Standort nicht verfügbar. Gib den Ort von Hand ein.', true);
+  }, { enableHighAccuracy:true, timeout:12000, maximumAge:60000 });
+});
+
+$('#demoBtn').addEventListener('click', () => launch(async () => ({ f: demoFeatures(), size: 800, name: 'Demo-Stadt' })));
+
+/* =====================================================================
+   12) HAUPTSCHLEIFE
+   ===================================================================== */
+let last = performance.now();
+function frame(now){
+  const rdt = Math.min(0.05, (now - last)/1000);
+  last = now;
+  if (G && running && $('#start').hidden){
+    const gdt = rdt * TIME_BASE * SPEEDS[speedIdx];
+    let zombiesExist = G.started;
+    if (zombiesExist){
+      G.fieldT -= gdt;
+      if (G.fieldT <= 0){ updateFields(); G.fieldT = FIELD_INTERVAL; }
+    }
+    const n = Math.max(1, Math.ceil(gdt / MAX_SUBSTEP)), sdt = gdt / n;
+    for (let k=0; k<n; k++) step(sdt);
+    G.time += gdt;
+  }
+  render(now);
+  if (G && $('#start').hidden) updateHud(now);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Test-Zugang für die Konsole
+window.__ausbruch = { get G(){ return G; }, cam, placeOutbreak, placeSoldier, addWall, setTool, step, updateFields };
+</script>
+</body>
+</html>
