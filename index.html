@@ -167,12 +167,22 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
 .stats dd{margin:0;font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:right}
 .btns{display:flex;flex-direction:column;gap:8px}
 
+/* ---------- Ladeanzeige ---------- */
+#loader{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:rgba(3,5,7,.72);
+  padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
+.load-card{width:100%;max-width:340px;background:#0f161b;border:1px solid var(--panel-line);border-radius:16px;padding:18px 20px 20px;display:flex;flex-direction:column;gap:10px}
+.load-title{font-family:var(--f-display);font-size:26px;line-height:1;color:var(--zombie)}
+#loadMsg{margin:0;font-family:var(--f-num);font-size:13px;color:#c8d1d8;min-height:2.9em;line-height:1.45}
+.load-bar{height:4px;border-radius:2px;background:#1b252e;overflow:hidden;position:relative}
+.load-bar i{position:absolute;top:0;bottom:0;left:0;width:35%;background:var(--zombie);border-radius:2px;animation:loadbar 1.1s ease-in-out infinite}
+@keyframes loadbar{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
+
 @media (min-width:700px){
   #hud{padding-left:max(16px,env(safe-area-inset-left,0px))}
   .hud-card{margin:0;max-width:420px}
 }
 @media (max-width:400px){.tool span{font-size:11px}.tool svg{width:20px;height:20px}.chip{font-size:14px;gap:4px}}
-@media (prefers-reduced-motion:reduce){.popbar i{transition:none}}
+@media (prefers-reduced-motion:reduce){.popbar i{transition:none}.load-bar i{animation:none;width:100%;opacity:.5}}
 </style>
 </head>
 <body>
@@ -183,7 +193,7 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
   <div class="start-inner">
     <div class="eyebrow">Zombie-Simulation</div>
     <h1>AUS<span>BRUCH</span></h1>
-    <p class="lead">Wähle einen echten Ort oder lass eine Zufallsstadt bauen. Menschen ziehen in Gruppen durch die Straßen, bis du den ersten Zombie aussetzt. Wer berührt wird, wird selbst einer.</p>
+    <p class="lead">Wähle einen echten Ort oder lass eine Zufallskarte bauen, von der Kleinstadt bis zur Region mit 16 × 16 km. Menschen ziehen in Gruppen durch die Straßen, bis du den ersten Zombie aussetzt. Wer berührt wird, wird selbst einer.</p>
     <dl class="legend">
       <dt><span class="dot h"></span></dt><dd><b>Mensch</b> <span class="num">· 1,4 m/s, meist in Gruppen</span></dd>
       <dt><span class="dot z"></span></dt><dd><b>Zombie</b> <span class="num">· 2,8 m/s</span></dd>
@@ -192,6 +202,13 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
       <dt><span class="mk t"></span></dt><dd><b>Teslaturm</b> <span class="num">· 26 m, Blitz springt weiter</span></dd>
     </dl>
     <div class="form">
+      <div class="field">
+        <label for="q">Echter Ort · Adresse oder Koordinaten</label>
+        <div class="row">
+          <input id="q" type="text" value="Obertshausen" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
+          <button id="geoBtn" class="btn small" type="button">Mein Standort</button>
+        </div>
+      </div>
       <div class="grid2">
         <div class="field">
           <label for="area">Gebiet</label>
@@ -206,17 +223,10 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
           <input id="pop" type="range" min="100" max="2000" step="50" value="500">
         </div>
       </div>
-      <div class="field">
-        <label for="q">Ort, Adresse oder Koordinaten</label>
-        <div class="row">
-          <input id="q" type="text" value="Obertshausen" autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
-          <button id="geoBtn" class="btn small" type="button">Mein Standort</button>
-        </div>
-      </div>
       <button id="loadBtn" class="btn primary" type="button">Echten Ort laden</button>
       <div class="divider">oder ohne Internet</div>
       <div class="field">
-        <label for="seed">Zufallsstadt · Seed (Zahl oder Wort)</label>
+        <label for="seed">Zufallskarte · Seed (Zahl oder Wort)</label>
         <div class="row">
           <input id="seed" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
           <button id="diceBtn" class="btn icon" type="button" aria-label="Neuen Seed würfeln">
@@ -224,10 +234,28 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
           </button>
         </div>
       </div>
-      <button id="randBtn" class="btn" type="button">Zufallsstadt bauen</button>
+      <div class="grid2">
+        <div class="field">
+          <label for="rsize">Größe</label>
+          <select id="rsize">
+            <option value="1000">1 × 1 km</option>
+            <option value="1500" selected>1,5 × 1,5 km</option>
+            <option value="3000">3 × 3 km</option>
+            <option value="6000">6 × 6 km</option>
+            <option value="10000">10 × 10 km</option>
+            <option value="16000">16 × 16 km</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="rpop">Menschen: <output id="rpopOut">800</output></label>
+          <input id="rpop" type="range" min="100" max="3000" step="50" value="800">
+        </div>
+      </div>
+      <p class="fine" id="rsizeNote"></p>
+      <button id="randBtn" class="btn" type="button">Zufallskarte bauen</button>
       <p id="status" role="status" aria-live="polite"></p>
     </div>
-    <p class="fine">Echte Orte: Kartendaten © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap-Mitwirkende</a> (ODbL), als Kacheln von <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>, Ortssuche über Nominatim. Geladene Karten werden auf diesem Gerät zwischengespeichert. Zufallsstädte entstehen ohne Internet allein aus dem Seed: gleicher Seed, gleiche Stadt.</p>
+    <p class="fine">Echte Orte: Kartendaten © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap-Mitwirkende</a> (ODbL), als Kacheln von <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noopener">OpenMapTiles</a>, Ortssuche über Nominatim. Geladene Karten werden auf diesem Gerät zwischengespeichert. Zufallskarten entstehen ohne Internet allein aus dem Seed: gleicher Seed und gleiche Größe ergeben dieselbe Karte.</p>
   </div>
 </section>
 
@@ -308,6 +336,15 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
   </div>
 </div>
 
+<!-- Ladeanzeige -->
+<div id="loader" hidden>
+  <div class="load-card" role="status" aria-live="polite">
+    <div class="load-title">Baue Karte</div>
+    <p id="loadMsg"></p>
+    <div class="load-bar" aria-hidden="true"><i></i></div>
+  </div>
+</div>
+
 <!-- Dialog -->
 <div id="modal" hidden>
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="mTitle">
@@ -322,7 +359,8 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
 'use strict';
 /* =====================================================================
    AUSBRUCH – Zombie-Ausbruch auf echten OpenStreetMap-Karten
-   Eine Datei, kein Build. Karten: Nominatim (Ortssuche) + Overpass (Daten).
+   oder auf Zufallskarten bis 16 × 16 km.
+   Eine Datei, kein Build. Karten: Nominatim (Ortssuche) + OpenFreeMap/Overpass (Daten).
    ===================================================================== */
 
 // ---------- Spielregeln ----------
@@ -358,15 +396,34 @@ const TOWER_R = 2.2;                // m Grundfläche (Radius)
 const WALL_THICK = 1.6;             // m Radius beim Mauer-Rastern
 const FIELD_INTERVAL = 0.3;         // s Spielzeit zwischen Wegfeld-Updates
 const MAX_SUBSTEP = 0.25;           // s Spielzeit pro Simulationsschritt
-const INF = 32767;
 const TAU = Math.PI*2;
 const H = 0, Z = 1, S = 2;          // Agententypen
 const BUILD = new Set(['wall', 'soldier', 'flame', 'tesla']);
+
+// Große Karten
+const CS = 64;                      // Zellen pro Block (128 m) für die Wegfelder
+const FAR = 255;                    // Wegfeld: außer Reichweite
+// Wegfelder speichern Abstand + 1, 0 heißt „nichts in Reichweite“. Unberührter Speicher bleibt so
+// auf dem Handy unbelegt, bis dort wirklich Zombies und Menschen aufeinandertreffen.
+const dv = (dist, i) => (dist[i] || 256) - 1;
+const COLD_STEP = 1.4;              // s: Menschen weit weg von Zombies rechnen in großen Schritten (≤ 2 m)
+const REGION_MIN = 6000;            // ab dieser Kantenlänge wird eine ganze Region gebaut
+
+// Zell-Bits im Raster G.cell (ein Byte pro 2-m-Zelle)
+const C_BLK = 1;                    // gerade blockiert (Haus, Wasser, Mauer, Turm)
+const C_ROAD = 2;                   // Straße
+const C_OPQ = 4;                    // Gebäude: blockiert Sicht und Schüsse
+const C_WALL = 8;                   // gebaute Mauer
+const C_SOLID = 16;                 // fest blockiert (aus der Karte)
+const C_TOWER = 32;                 // Turm-Grundfläche
+const C_MAIN = 64;                  // größte zusammenhängende Lauffläche
+const C_TMP = 128;                  // Hilfsbit beim Durchsuchen
 
 // Kartenfarben (Lagekarte bei Nacht)
 const COL = {
   void:'#070a0d', ground:'#0e1317', green:'#111d16', wood:'#0f1c14',
   water:'#0b2a42', waterEdge:'#17537c',
+  fields:['#131b12', '#17190f', '#11180f', '#151b15'], roadHw:'#4b5662',
   roadCase:'#151b21', roadMajor:'#38424c', road:'#2c353e', path:'#242c34',
   bldg:'#1a2430', bldgEdge:'#32475d', barrier:'#4a5866', rail:'#3a4048',
   frame:'#3a4a58', grid:'rgba(255,255,255,0.035)',
@@ -739,7 +796,7 @@ function parseOSM(json, lat0, lon0){
 }
 
 function emptyFeatures(){
-  return { buildings:[], water:[], waterLines:[], roads:[], roadAreas:[], barriers:[], green:[], wood:[], rails:[] };
+  return { buildings:[], water:[], waterLines:[], roads:[], roadAreas:[], barriers:[], green:[], wood:[], rails:[], fields:[] };
 }
 
 function classifyWay(t, pts, closed, f){
@@ -829,9 +886,11 @@ async function cachePut(key, val){
 }
 
 /* =====================================================================
-   2) ZUFALLSSTADT (funktioniert ohne Internet, gleicher Seed = gleiche Stadt)
-   Fluss mit Brücken, Altstadt mit Marktplatz, Kirche und oft einer Stadtmauer,
-   drumherum Viertel: Einfamilienhäuser, Wohnblocks, Gewerbe, Parks und Wald.
+   2) ZUFALLSKARTEN (funktionieren ohne Internet, gleicher Seed = gleiche Karte)
+   Bis 3 km: eine Stadt füllt die Karte. Fluss mit Brücken, Altstadt mit
+   Marktplatz, Kirche und oft einer Stadtmauer, drumherum Viertel.
+   Ab 6 km: eine ganze Region. Großstadt, Städte und Dörfer, verbunden durch
+   Landstraßen und Autobahn, dazwischen Felder, Höfe, Wald, Seen und Flüsse.
    ===================================================================== */
 function hashSeed(txt){
   let h = 2166136261;
@@ -851,11 +910,25 @@ function townName(rnd){
   return core[0].toUpperCase() + core.slice(1);
 }
 
+// Stadtgrenze einer Stadt in der Region: unregelmäßiger Kreis
+function townRadius(sh, H, a){ return H*(0.86 + 0.09*Math.sin(sh.k1*a + sh.p1) + 0.05*Math.sin(sh.k2*a + sh.p2)); }
+function townInside(sh, H, x, y){ const r = townRadius(sh, H, Math.atan2(y, x)); return x*x + y*y < r*r; }
+
 function randomCity(seed, S){
-  const rnd = mulberry32(seed*7919 + 13);
+  const r = genTown(mulberry32(seed*7919 + 13), S);
+  r.f.gen = true;
+  return r;
+}
+
+// Eine Stadt mit Mittelpunkt (0,0) auf S × S Metern.
+// opt.embed: Die Stadt liegt in einer Region. Sie hat dann eine runde Grenze (opt.shape),
+// Flüsse, Landstraßen und Bahn kommen von außen (opt.ext) und werden nur berücksichtigt.
+function genTown(rnd, S, opt){
+  opt = opt || {};
+  const embed = !!opt.embed, tiny = embed && S < 700;
   const R = (a, b) => a + (b - a)*rnd();
   const H = S/2, f = emptyFeatures();
-  const name = townName(rnd);
+  const name = opt.name || townName(rnd);
 
   // Planungsraster (1 m): occ = belegt (Straße, Wasser, Haus), wet = Flussufer-Zone
   const E = S + 160, OC = 1, OW = Math.ceil(E/OC);
@@ -894,7 +967,8 @@ function randomCity(seed, S){
     for (let a = 0; a < TAU; a += 0.12){ const rr = r*(1 + jag*Math.sin(k1*a + p1) + jag*0.5*Math.sin(k2*a + p2)); out.push([cx + Math.cos(a)*rr, cy + Math.sin(a)*rr]); }
     return out;
   };
-  const inMap = p => Math.abs(p[0]) < H + 40 && Math.abs(p[1]) < H + 40;
+  // Stadtgebiet: ganze Karte oder (in einer Region) innerhalb der Stadtgrenze
+  const inMap = embed ? (p => townInside(opt.shape, H, p[0], p[1])) : (p => Math.abs(p[0]) < H + 40 && Math.abs(p[1]) < H + 40);
   const dry = p => !at(wet, p[0], p[1]);
   // Teilstücke einer Linie, die eine Bedingung erfüllen und lang genug sind
   const runs = (pts, keep, minLen) => {
@@ -910,32 +984,45 @@ function randomCity(seed, S){
   const streets = [];
   const add = (pts, w, o = {}) => { if (pts.length >= 2) streets.push({ pts, w, major: !!o.major, small: !!o.small, art: !!o.art }); };
 
-  // --- Fluss und Bach ---
+  // --- Fluss und Bach (in der Region: von außen) ---
   const rivers = [];
-  if (rnd() < 0.8){
-    const ang = R(0, TAU), ux = Math.cos(ang), uy = Math.sin(ang), off = R(-0.28, 0.28)*S, w = R(16, 30);
-    const wf = wobble(R(25, 60), R(140, 260), R(5, 14), R(35, 70));
-    const pts = [];
-    for (let t = -S; t <= S; t += 8){ const o = off + wf(t); pts.push([ux*t - uy*o, uy*t + ux*o]); }
-    rivers.push({ pts, w });
-    f.waterLines.push({ pts, w });
-    stampLine(wet, pts, w/2 + 7, 1);
-    stampLine(occ, pts, w/2 + 2, 1);
-  }
-  if (rnd() < 0.45){
-    const ang = R(0, TAU), ux = Math.cos(ang), uy = Math.sin(ang), off = R(-0.4, 0.4)*S;
-    const wf = wobble(R(10, 25), R(60, 120), R(3, 8), R(20, 40));
-    const pts = [];
-    for (let t = -S; t <= S; t += 6){ const o = off + wf(t); pts.push([ux*t - uy*o, uy*t + ux*o]); }
-    f.waterLines.push({ pts, w:3 });
-    stampLine(occ, pts, 3, 1);
+  if (embed){
+    const ext = opt.ext;
+    for (const l of ext.waterLines){
+      stampLine(wet, l.pts, l.w/2 + 7, 1);
+      stampLine(occ, l.pts, l.w/2 + 2, 1);
+      if (l.w >= 12 && l.pts.length > 24) rivers.push(l);
+    }
+    for (const r of ext.rails) stampLine(occ, r, 4, 1);
+    // Landstraßen und Autobahn laufen durch die Stadt: Häuser stehen daran, aber nicht an der Autobahn
+    for (const r of ext.roads) streets.push({ pts:r.pts, w:r.w, major:true, small:false, art:true, ext:true, hw:!!r.hw });
+  } else {
+    if (rnd() < 0.8){
+      const ang = R(0, TAU), ux = Math.cos(ang), uy = Math.sin(ang), off = R(-0.28, 0.28)*S, w = R(16, 30);
+      const wf = wobble(R(25, 60), R(140, 260), R(5, 14), R(35, 70));
+      const pts = [];
+      for (let t = -S; t <= S; t += 8){ const o = off + wf(t); pts.push([ux*t - uy*o, uy*t + ux*o]); }
+      rivers.push({ pts, w });
+      f.waterLines.push({ pts, w });
+      stampLine(wet, pts, w/2 + 7, 1);
+      stampLine(occ, pts, w/2 + 2, 1);
+    }
+    if (rnd() < 0.45){
+      const ang = R(0, TAU), ux = Math.cos(ang), uy = Math.sin(ang), off = R(-0.4, 0.4)*S;
+      const wf = wobble(R(10, 25), R(60, 120), R(3, 8), R(20, 40));
+      const pts = [];
+      for (let t = -S; t <= S; t += 6){ const o = off + wf(t); pts.push([ux*t - uy*o, uy*t + ux*o]); }
+      f.waterLines.push({ pts, w:3 });
+      stampLine(occ, pts, 3, 1);
+    }
   }
 
   // --- Altstadt-Mittelpunkt (nicht im Fluss) ---
-  const ROLD = Math.max(80, Math.min(230, S*R(0.12, 0.19)));
+  const ROLD = tiny ? R(55, 80) : Math.max(80, Math.min(230, S*R(0.12, 0.19)));
+  const cr = embed ? 0.06 : 0.22;
   let C = [0, 0];
   for (let k=0; k<60; k++){
-    C = [R(-0.22, 0.22)*S, R(-0.22, 0.22)*S];
+    C = [R(-cr, cr)*S, R(-cr, cr)*S];
     let ok = !at(wet, C[0], C[1]);
     for (let a = 0; a < TAU && ok; a += TAU/8) if (at(wet, C[0] + Math.cos(a)*ROLD*0.45, C[1] + Math.sin(a)*ROLD*0.45)) ok = false;
     if (ok) break;
@@ -943,14 +1030,16 @@ function randomCity(seed, S){
 
   // --- Viertel (Voronoi um zufällige Mittelpunkte) ---
   const OLD = { type:'old' }, D = [];
-  const K = 4 + Math.round(S/250);
+  const K = (embed ? 2 : 4) + Math.round(S/250), dr = embed ? 0.42 : 0.6;
   for (let k=0; k<K; k++){
     let p = [0, 0];
-    for (let t=0; t<40; t++){ p = [R(-0.6, 0.6)*S, R(-0.6, 0.6)*S]; if (Math.hypot(p[0]-C[0], p[1]-C[1]) > ROLD + 70) break; }
+    for (let t=0; t<40; t++){ p = [R(-dr, dr)*S, R(-dr, dr)*S]; if (Math.hypot(p[0]-C[0], p[1]-C[1]) > ROLD + 70) break; }
     const edge = Math.max(Math.abs(p[0]), Math.abs(p[1])) > H*0.6;
     const r = rnd();
     let type = r < 0.36 ? 'detached' : r < 0.6 ? 'apart' : r < 0.72 ? 'industry' : r < 0.85 ? 'park' : 'forest';
     if (type === 'forest' && !edge) type = 'detached';
+    if (embed && type === 'forest') type = 'park';      // Wald liefert die Region
+    if (tiny && type !== 'park') type = 'detached';     // Dörfer: Einfamilienhäuser
     const sp = type === 'industry' ? R(95, 140) : type === 'detached' ? R(55, 80) : R(65, 95);
     D.push({ x:p[0], y:p[1], type, ang:R(0, Math.PI/2), sp, curvy: type === 'detached' && rnd() < 0.6, wf: wobble(R(4, 12), R(50, 110), 0, 1), blob:null });
   }
@@ -978,13 +1067,14 @@ function randomCity(seed, S){
   }
 
   // --- Hauptstraßen quer durch die Stadt (überqueren den Fluss als Brücken) ---
-  const nA = 2 + (rnd() < 0.55 ? 1 : 0), a0 = R(0, Math.PI);
+  const nA = embed ? (tiny ? 0 : 1 + (rnd() < 0.5 ? 1 : 0)) : 2 + (rnd() < 0.55 ? 1 : 0), a0 = R(0, Math.PI);
+  const artIn = embed ? inMap : (p => Math.abs(p[0]) < H + 80 && Math.abs(p[1]) < H + 80);
   for (let k=0; k<nA; k++){
     const ang = a0 + k*Math.PI/nA + R(-0.22, 0.22), ux = Math.cos(ang), uy = Math.sin(ang);
     const wf = wobble(R(10, 28), R(180, 380), R(2, 6), R(50, 110));
     const c0 = [C[0] + R(-12, 12), C[1] + R(-12, 12)], pts = [];
     for (let t = -S*1.2; t <= S*1.2; t += 10){ const o = wf(t)*Math.min(1, Math.abs(t)/ROLD); pts.push([c0[0] + ux*t - uy*o, c0[1] + uy*t + ux*o]); }
-    runs(pts, p => Math.abs(p[0]) < H + 80 && Math.abs(p[1]) < H + 80, 20).forEach(r => add(r, R(10, 12.5), { major:true, art:true }));
+    runs(pts, artIn, 20).forEach(r => add(r, R(10, 12.5), { major:true, art:true }));
   }
 
   // --- Altstadt: Gassen sternförmig, ein Ring, Querverbindungen, Marktplatz, Kirche ---
@@ -1013,7 +1103,7 @@ function randomCity(seed, S){
   stampPoly(occ, rectPts(C[0], C[1], mux, muy, mw + 4, mh + 4), 1);
 
   // --- Stadtmauer (Tore entstehen dort, wo Straßen hindurchführen) ---
-  if (rnd() < 0.55){
+  if (!tiny && rnd() < (embed ? 0.4 : 0.55)){
     const wr = ROLD*R(0.95, 1.0), wp = R(0, TAU), wall = [];
     for (let a = 0; a <= TAU + 0.01; a += 0.05){ const r = wr*(1 + 0.06*Math.sin(4*a + wp)); wall.push([C[0] + Math.cos(a)*r, C[1] + Math.sin(a)*r]); }
     runs(wall, p => dry(p) && inMap(p), 10).forEach(r => { f.barriers.push({ pts:r, w:2.6 }); stampLine(occ, r, 2.5, 1); });
@@ -1067,15 +1157,15 @@ function randomCity(seed, S){
     runs(prom, inMap, 30).forEach(r => add(r, 3, { small:true }));
   }
 
-  // --- Bahnlinie ---
-  if (rnd() < 0.5){
+  // --- Bahnlinie (in der Region: von außen) ---
+  if (!embed && rnd() < 0.5){
     const ang = R(0, TAU), ux = Math.cos(ang), uy = Math.sin(ang), off = R(-0.45, 0.45)*S, wf = wobble(R(5, 15), R(300, 500), 0, 1), pts = [];
     for (let t = -S; t <= S; t += 12){ const o = off + wf(t); pts.push([ux*t - uy*o, uy*t + ux*o]); }
     f.rails.push(pts); stampLine(occ, pts, 4, 1);
   }
 
   // Straßen in die Planung eintragen, damit keine Häuser darauf landen
-  for (const st of streets) stampLine(occ, st.pts, st.w/2 + (st.small ? 0.3 : 0.6), 1);
+  for (const st of streets) stampLine(occ, st.pts, st.w/2 + (st.small ? 0.3 : 0.6) + (st.hw ? 8 : 0), 1);
 
   // --- Häuser entlang der Straßen ---
   const sampleRect = (cx, cy, ux, uy, w, h, fn, step = 1) => {
@@ -1091,6 +1181,7 @@ function randomCity(seed, S){
     sampleRect(cx, cy, ux, uy, w, h, (x, y) => { const i = oi(x, y); if (i >= 0) occ[i] = 3; }, 0.7);
     f.buildings.push([rectPts(cx, cy, ux, uy, w, h)]);
   };
+  const bIn = embed ? ((x, y) => townInside(opt.shape, H, x, y)) : ((x, y) => Math.abs(x) <= H + 15 && Math.abs(y) <= H + 15);
   // Kirche am Marktplatz
   {
     const cx = C[0] - muy*(mh/2 + 13), cy = C[1] + mux*(mh/2 + 13);
@@ -1104,7 +1195,7 @@ function randomCity(seed, S){
     park:     { set:5,   w:[8, 12],  d:[8, 11],  gap:[10, 18], m:1.5, rows:1 }
   };
   for (const st of streets){
-    if (st.small) continue;
+    if (st.small || st.hw) continue;
     const pts = st.pts, cum = [0];
     for (let k=1; k<pts.length; k++) cum.push(cum[k-1] + Math.hypot(pts[k][0]-pts[k-1][0], pts[k][1]-pts[k-1][1]));
     const total = cum[cum.length-1];
@@ -1123,7 +1214,7 @@ function randomCity(seed, S){
           const cx = x + ux*bw/2 - uy*side*(off + bd/2), cy = y + uy*bw/2 + ux*side*(off + bd/2);
           off += bd + 0.6;
           if (row > 0 && rnd() < 0.5) continue;
-          if (Math.abs(cx) > H + 15 || Math.abs(cy) > H + 15) continue;
+          if (!bIn(cx, cy)) continue;
           if (noBuild.some(b => inPoly(cx, cy, b))) continue;
           if (canPlace(cx, cy, ux, uy, bw, bd, P.m)) placeB(cx, cy, ux, uy, bw, bd);
         }
@@ -1133,15 +1224,312 @@ function randomCity(seed, S){
     }
   }
 
-  for (const st of streets) f.roads.push({ pts:st.pts, w:st.w, tunnel:false, major:st.major, small:st.small });
-  return { f, name };
+  for (const st of streets) if (!st.ext) f.roads.push({ pts:st.pts, w:st.w, tunnel:false, major:st.major, small:st.small });
+  return { f, name, C };
+}
+
+// Ganze Region. Läuft in Etappen, damit der Ladebildschirm zeigen kann, was gerade entsteht.
+async function randomRegion(seed, S, say){
+  const rnd = mulberry32(seed*7919 + 29);
+  const R = (a, b) => a + (b - a)*rnd();
+  const RI = (a, b) => a + Math.floor(rnd()*(b - a + 1));
+  const H = S/2, f = emptyFeatures();
+  f.gen = true;
+  const stage = async msg => { if (say) await say(msg); };
+
+  // Grobraster (20 m) zum Planen: was liegt schon wo?
+  const CG = 20, GW = Math.ceil(S/CG) + 4;
+  const grid = new Uint8Array(GW*GW);
+  const TOWN = 1, WOOD = 2, WATER = 4, ROAD = 8, FARM = 16;
+  const gx = v => Math.floor((v + H)/CG) + 2;
+  const gget = (x, y) => { const ix = gx(x), iy = gx(y); return (ix < 0 || iy < 0 || ix >= GW || iy >= GW) ? 0 : grid[iy*GW + ix]; };
+  const gscan = (x, y, r, fn) => {
+    const n = Math.ceil(r/CG), cx = gx(x), cy = gx(y), rr = (r/CG + 0.5)**2;
+    for (let dy = -n; dy <= n; dy++) for (let dx = -n; dx <= n; dx++){
+      const ix = cx + dx, iy = cy + dy;
+      if (ix < 0 || iy < 0 || ix >= GW || iy >= GW || dx*dx + dy*dy > rr) continue;
+      if (fn(iy*GW + ix) === true) return true;
+    }
+    return false;
+  };
+  const gdisk = (x, y, r, bit) => { gscan(x, y, r, i => { grid[i] |= bit; }); };
+  const ghits = (x, y, r, bits) => gscan(x, y, r, i => (grid[i] & bits) !== 0);
+  const gline = (pts, r, bit) => {
+    for (let k = 1; k < pts.length; k++){
+      const [x0, y0] = pts[k-1], [x1, y1] = pts[k], n = Math.max(1, Math.ceil(Math.hypot(x1-x0, y1-y0)/10));
+      for (let q = 0; q <= n; q++) gdisk(x0 + (x1-x0)*q/n, y0 + (y1-y0)*q/n, r, bit);
+    }
+  };
+  const inPoly = (x, y, poly) => {
+    let c = false;
+    for (let i=0, j=poly.length-1; i<poly.length; j=i++){
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if ((yi > y) !== (yj > y) && x < (xj - xi)*(y - yi)/(yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  const polyBox = poly => { let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (const [x, y] of poly){ x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); } return [x0, y0, x1, y1]; };
+  const gpoly = (poly, bit) => {
+    const [x0, y0, x1, y1] = polyBox(poly);
+    for (let y = Math.floor(y0/CG)*CG + CG/2; y <= y1; y += CG) for (let x = Math.floor(x0/CG)*CG + CG/2; x <= x1; x += CG) if (inPoly(x, y, poly)) gdisk(x, y, 0, bit);
+  };
+  const polyHits = (poly, bits) => {
+    if (poly.some(p => gget(p[0], p[1]) & bits)) return true;
+    const [x0, y0, x1, y1] = polyBox(poly);
+    for (let y = y0; y <= y1; y += 60) for (let x = x0; x <= x1; x += 60) if ((gget(x, y) & bits) && inPoly(x, y, poly)) return true;
+    return false;
+  };
+  const wob = (a1, l1, a2, l2) => { const p1 = R(0, TAU), p2 = R(0, TAU); return t => a1*Math.sin(t/l1 + p1) + a2*Math.sin(t/l2 + p2); };
+  const blob = (cx, cy, r, jag) => {
+    const p1 = R(0, TAU), p2 = R(0, TAU), k1 = 2 + (rnd()*3|0), k2 = 5 + (rnd()*4|0), out = [];
+    for (let a = 0; a < TAU; a += 0.12){ const rr = r*(1 + jag*Math.sin(k1*a + p1) + jag*0.5*Math.sin(k2*a + p2)); out.push([cx + Math.cos(a)*rr, cy + Math.sin(a)*rr]); }
+    return out;
+  };
+  const distLine = (x, y, pts) => {
+    let best = Infinity;
+    for (let k = 1; k < pts.length; k++){
+      const a = pts[k-1], b = pts[k], vx = b[0]-a[0], vy = b[1]-a[1], l2 = vx*vx + vy*vy || 1;
+      const t = Math.max(0, Math.min(1, ((x-a[0])*vx + (y-a[1])*vy)/l2));
+      const d = Math.hypot(x - a[0] - vx*t, y - a[1] - vy*t);
+      if (d < best) best = d;
+    }
+    return best;
+  };
+  const clipRuns = (pts, keep) => {
+    const out = []; let cur = [];
+    for (const p of pts){ if (keep(p)) cur.push(p); else { if (cur.length >= 2) out.push(cur); cur = []; } }
+    if (cur.length >= 2) out.push(cur);
+    return out;
+  };
+  const rectPts = (cx, cy, ux, uy, w, h) => [[-1,-1], [1,-1], [1,1], [-1,1]].map(([a, b]) => [cx + ux*a*w/2 - uy*b*h/2, cy + uy*a*w/2 + ux*b*h/2]);
+  const nearMap = (x, y, m) => Math.abs(x) < H + m && Math.abs(y) < H + m;
+
+  // --- 1) Flüsse: ein Hauptfluss, ein Nebenfluss, ein paar Bäche ---
+  await stage('Lege Flüsse an …');
+  const rivers = [];
+  const across = (w, off, wf) => {
+    const ang = R(0, TAU), ux = Math.cos(ang), uy = Math.sin(ang), pts = [];
+    for (let t = -S*0.78; t <= S*0.78; t += 12){ const o = off + wf(t); pts.push([ux*t - uy*o, uy*t + ux*o]); }
+    return { pts, w };
+  };
+  // Zweig, der an einem vorhandenen Fluss beginnt und vom ihm wegläuft
+  const branch = (w, maxLen, wf) => {
+    const mp = rivers[(rnd()*rivers.length)|0].pts;
+    const i = Math.max(1, Math.min(mp.length - 2, Math.floor(mp.length*R(0.2, 0.8))));
+    const p = mp[i], q = mp[i+1], dx = q[0]-p[0], dy = q[1]-p[1], L = Math.hypot(dx, dy) || 1, side = rnd() < 0.5 ? -1 : 1;
+    const ang = Math.atan2(dx/L*side, -dy/L*side) + R(-0.6, 0.6), ux = Math.cos(ang), uy = Math.sin(ang), pts = [];
+    for (let t = 0; t <= maxLen; t += 10){
+      const o = wf(t)*Math.min(1, t/300), x = p[0] + ux*t - uy*o, y = p[1] + uy*t + ux*o;
+      pts.push([x, y]);
+      if (!nearMap(x, y, 200)) break;
+    }
+    return { pts, w };
+  };
+  if (rnd() < 0.9) rivers.push(across(R(24, 40), R(-0.16, 0.16)*S, wob(R(150, 420), R(900, 2200), R(20, 70), R(160, 340))));
+  else rivers.push(across(R(12, 18), R(-0.3, 0.3)*S, wob(R(80, 250), R(600, 1400), R(10, 40), R(120, 260))));
+  if (rnd() < 0.8) rivers.push(branch(R(9, 15), S*1.2, wob(R(60, 200), R(500, 1200), R(10, 30), R(90, 180))));
+  for (let k = 0, n = RI(1, 2) + Math.round(S/7000); k < n; k++) rivers.push(branch(R(3, 5.5), R(1200, 4000), wob(R(20, 70), R(150, 320), R(5, 15), R(40, 80))));
+  for (const rv of rivers){ f.waterLines.push({ pts:rv.pts, w:rv.w }); gline(rv.pts, rv.w/2 + 14, WATER); }
+
+  // --- 2) Großstadt am Fluss, Städte, Dörfer ---
+  await stage('Verteile Städte und Dörfer …');
+  const plan = S >= 14000 ? { cities:[R(2800, 3200), R(2100, 2500)], towns:RI(6, 8), villages:RI(18, 24) }
+             : S >= 9000  ? { cities:[R(2500, 2900)], towns:RI(3, 5), villages:RI(9, 13) }
+             :              { cities:[R(1900, 2300)], towns:RI(2, 3), villages:RI(4, 6) };
+  const towns = [], names = new Set();
+  const newName = () => { let n = ''; for (let k=0; k<40; k++){ n = townName(rnd); if (!names.has(n)) break; } names.add(n); return n; };
+  const fits = (x, y, r, gap) => Math.abs(x) < H - r*0.4 && Math.abs(y) < H - r*0.4 && towns.every(t => Math.hypot(t.x - x, t.y - y) > (t.r + r)*gap + 120);
+  const riverD = (x, y) => distLine(x, y, rivers[0].pts);
+  const placeTown = (size, kind, spread, score, gap) => {
+    const r = size/2;
+    let best = null, bs = -Infinity;
+    for (let k = 0; k < 50; k++){
+      const x = R(-spread, spread)*S, y = R(-spread, spread)*S;
+      if (!fits(x, y, r, gap)) continue;
+      const s = score(x, y);
+      if (s > bs){ bs = s; best = [x, y]; }
+    }
+    if (!best) return null;
+    const t = { x:best[0], y:best[1], S:Math.round(size), r:Math.round(size)/2, kind, name:newName(),
+                shape:{ p1:R(0, TAU), p2:R(0, TAU), k1:2 + (rnd()*2|0), k2:4 + (rnd()*3|0) } };
+    towns.push(t);
+    return t;
+  };
+  const c1 = placeTown(plan.cities[0], 'city', 0.16, (x, y) => -Math.abs(riverD(x, y) - 160) + R(0, 150), 1.3);
+  if (plan.cities[1]) placeTown(plan.cities[1], 'city', 0.4, (x, y) => Math.hypot(x - c1.x, y - c1.y) + R(0, 1500), 1.3);
+  for (let k = 0; k < plan.towns; k++) placeTown(R(900, 1500), 'town', 0.45, (x, y) => -Math.min(riverD(x, y), 2500)*0.4 + R(0, 1800), 1.3);
+  for (let k = 0; k < plan.villages; k++) placeTown(R(320, 600), 'village', 0.47, () => rnd(), 1.15);
+  for (const t of towns){
+    gscan(t.x, t.y, t.r + CG, i => {
+      const ix = i % GW, iy = (i / GW) | 0, wx = (ix - 2)*CG - H + CG/2, wy = (iy - 2)*CG - H + CG/2;
+      if (townInside(t.shape, t.r, wx - t.x, wy - t.y)) grid[i] |= TOWN;
+    });
+  }
+
+  // --- 3) Landstraßen (Spannbaum + Querverbindungen + Ausfallstraßen), Autobahn, Bahn ---
+  await stage('Zieht Landstraßen und Autobahn …');
+  const rroads = [];
+  const roadLine = (a, b) => {
+    const dx = b[0]-a[0], dy = b[1]-a[1], L = Math.hypot(dx, dy) || 1, ux = dx/L, uy = dy/L;
+    const A1 = Math.min(L*0.07, 380)*R(0.25, 1), l1 = R(350, 900), p1 = R(0, TAU), A2 = R(4, 22), l2 = R(70, 160), p2 = R(0, TAU);
+    const n = Math.max(2, Math.ceil(L/15)), pts = [];
+    for (let k = 0; k <= n; k++){
+      const t = L*k/n, o = Math.sin(Math.PI*k/n)*(A1*Math.sin(t/l1 + p1) + A2*Math.sin(t/l2 + p2));
+      pts.push([a[0] + ux*t - uy*o, a[1] + uy*t + ux*o]);
+    }
+    return pts;
+  };
+  const addRoad = (pts, w, hw) => { rroads.push({ pts, w, hw:!!hw }); gline(pts, w/2 + 12, ROAD); };
+  const pairs = [];
+  for (let i = 0; i < towns.length; i++) for (let j = i + 1; j < towns.length; j++) pairs.push([Math.hypot(towns[i].x - towns[j].x, towns[i].y - towns[j].y), i, j]);
+  pairs.sort((a, b) => a[0] - b[0]);
+  const par = towns.map((_, i) => i), find = i => par[i] === i ? i : (par[i] = find(par[i]));
+  const links = [];
+  for (const [, i, j] of pairs) if (find(i) !== find(j)){ par[find(i)] = find(j); links.push([i, j]); }
+  const dirOf = (i, j) => Math.atan2(towns[j].y - towns[i].y, towns[j].x - towns[i].x);
+  const crowded = (i, j) => links.some(([a, b]) => (a === i || b === i) && Math.abs(angDiff(dirOf(i, a === i ? b : a), dirOf(i, j))) < 0.45);
+  for (let i = 0; i < towns.length; i++){
+    const near = towns.map((t, j) => [Math.hypot(t.x - towns[i].x, t.y - towns[i].y), j]).filter(p => p[1] !== i).sort((a, b) => a[0] - b[0]);
+    for (const [d, j] of near.slice(0, towns[i].kind === 'village' ? 2 : 3)){
+      if (links.some(([a, b]) => (a === i && b === j) || (a === j && b === i))) continue;
+      if (d > S*0.4 || rnd() > 0.5 || crowded(i, j) || crowded(j, i)) continue;
+      links.push([i, j]);
+    }
+  }
+  for (const [i, j] of links){
+    const a = towns[i], b = towns[j];
+    addRoad(roadLine([a.x, a.y], [b.x, b.y]), a.kind === 'village' && b.kind === 'village' ? 7 : 9);
+  }
+  for (let k = 0, n = RI(3, 5) + Math.round(S/8000); k < n; k++){
+    const t = towns[(rnd()*Math.min(towns.length, 8))|0];
+    const ang = Math.atan2(t.y, t.x) + R(-0.7, 0.7), ux = Math.cos(ang), uy = Math.sin(ang);
+    const lx = ux > 1e-6 ? (H - t.x)/ux : ux < -1e-6 ? (-H - t.x)/ux : Infinity;
+    const ly = uy > 1e-6 ? (H - t.y)/uy : uy < -1e-6 ? (-H - t.y)/uy : Infinity;
+    const L = Math.min(lx, ly) + 250;
+    addRoad(roadLine([t.x, t.y], [t.x + ux*L, t.y + uy*L]), 9);
+  }
+  const cities = towns.filter(t => t.kind === 'city');
+  const longLine = (c, off, wf) => {
+    const ang = R(0, Math.PI), ux = Math.cos(ang), uy = Math.sin(ang), px = c.x - uy*off, py = c.y + ux*off, o0 = wf(0), pts = [];
+    for (let t = -S*1.5; t <= S*1.5; t += 20){
+      const o = wf(t) - o0, x = px + ux*t - uy*o, y = py + uy*t + ux*o;
+      if (nearMap(x, y, 300)) pts.push([x, y]);
+    }
+    return pts;
+  };
+  for (const c of cities){
+    // Autobahn am Stadtrand vorbei
+    const pts = longLine(c, (rnd() < 0.5 ? -1 : 1)*c.r*R(0.5, 0.85), wob(R(80, 260), R(2500, 5000), R(10, 30), R(400, 800)));
+    if (pts.length > 2) addRoad(pts, 24, true);
+  }
+  for (const c of cities){
+    // Bahnlinie mitten durch die Stadt
+    const pts = longLine(c, 0, wob(R(100, 350), R(2500, 6000), R(10, 40), R(500, 900)));
+    if (pts.length > 2){ f.rails.push(pts); gline(pts, 10, ROAD); }
+  }
+
+  // --- 4) Seen und Wälder ---
+  await stage('Füllt Seen, pflanzt Wälder …');
+  for (let k = 0, n = RI(1, 2) + Math.round(S/5000); k < n; k++) for (let t = 0; t < 40; t++){
+    const r = R(90, 360), x = R(-0.46, 0.46)*S, y = R(-0.46, 0.46)*S;
+    if (ghits(x, y, r*1.35 + 50, TOWN | ROAD | WATER)) continue;
+    const poly = blob(x, y, r, 0.25);
+    f.water.push([poly]); gpoly(poly, WATER); gdisk(x, y, r*1.15, WATER);
+    break;
+  }
+  for (let k = 0, n = RI(3, 5) + Math.round(S/2200); k < n; k++) for (let t = 0; t < 30; t++){
+    const r = R(280, 1200)*Math.min(1, 0.6 + S/20000), x = R(-0.5, 0.5)*S, y = R(-0.5, 0.5)*S;
+    if (ghits(x, y, r*0.5, TOWN)) continue;
+    const poly = blob(x, y, r, 0.3);
+    if (polyHits(poly, TOWN)) continue;
+    const parts = [poly];
+    if (rnd() < 0.6){
+      const a = R(0, TAU), d = r*R(0.6, 0.9), p2 = blob(x + Math.cos(a)*d, y + Math.sin(a)*d, r*R(0.4, 0.7), 0.3);
+      if (!polyHits(p2, TOWN)) parts.push(p2);
+    }
+    for (const p of parts){ f.wood.push([p]); gpoly(p, WOOD); }
+    for (let j = 0; j < 2; j++){
+      const a = R(0, TAU), ca = Math.cos(a), sa = Math.sin(a), wf = wob(R(10, 40), R(80, 200), 0, 1), pts = [];
+      for (let s = -r*1.4; s <= r*1.4; s += 8){ const o = wf(s); pts.push([x + ca*s - sa*o, y + sa*s + ca*o]); }
+      clipRuns(pts, p => inPoly(p[0], p[1], poly)).forEach(run => { if (run.length > 8) f.roads.push({ pts:run, w:3.2, tunnel:false, major:false, small:true }); });
+    }
+    break;
+  }
+
+  // --- 5) Höfe an den Landstraßen ---
+  await stage('Baut Höfe und teilt Felder ein …');
+  for (const rd of rroads){
+    if (rd.hw) continue;
+    const pts = rd.pts;
+    let acc = R(200, 800);
+    for (let k = 1; k < pts.length; k++){
+      const [x0, y0] = pts[k-1], [x1, y1] = pts[k], L = Math.hypot(x1-x0, y1-y0) || 1;
+      acc -= L;
+      if (acc > 0) continue;
+      acc = R(500, 1300);
+      if (rnd() > 0.5) continue;
+      const ux = (x1-x0)/L, uy = (y1-y0)/L, side = rnd() < 0.5 ? -1 : 1, off = R(55, 75), nx = -uy*side, ny = ux*side;
+      const fx = x1 + nx*off, fy = y1 + ny*off;
+      if (!nearMap(fx, fy, -60)) continue;
+      if (ghits(fx, fy, 45, TOWN | WOOD | WATER | FARM) || ghits(fx, fy, 22, ROAD)) continue;
+      const P = (u, n) => [fx + ux*u + nx*n, fy + uy*u + ny*n];
+      const put = (u, n, w, h) => { const [cx, cy] = P(u, n); f.buildings.push([rectPts(cx, cy, ux, uy, w, h)]); };
+      put(-12, -4, R(10, 14), R(9, 12));          // Wohnhaus
+      put(13, 2, R(22, 30), R(12, 16));           // Scheune
+      if (rnd() < 0.6) put(-10, 14, R(8, 12), R(6, 9));   // Schuppen
+      f.roads.push({ pts:[[x1 + nx*3, y1 + ny*3], P(-3, -12)], w:3.5, tunnel:false, major:false, small:true });
+      gdisk(fx, fy, 50, FARM);
+    }
+  }
+
+  // --- 6) Felder: Flickenteppich aus Zonen mit eigener Ausrichtung ---
+  f.fields = [];
+  const nZ = Math.max(4, Math.round(S*S/(2300*2300))), zones = [];
+  for (let k = 0; k < nZ; k++) zones.push({ x:R(-H, H), y:R(-H, H), a:R(0, Math.PI), u:R(150, 300), v:R(70, 170) });
+  const zoneAt = (x, y) => { let b = 0, bd = Infinity; for (let k = 0; k < zones.length; k++){ const d = (zones[k].x - x)**2 + (zones[k].y - y)**2; if (d < bd){ bd = d; b = k; } } return b; };
+  const reach = 1.7*S/Math.sqrt(nZ), BAD = TOWN | WOOD | WATER | FARM;
+  for (let zi = 0; zi < zones.length; zi++){
+    const z = zones[zi], ux = Math.cos(z.a), uy = Math.sin(z.a), nu = Math.ceil(reach/z.u), nv = Math.ceil(reach/z.v);
+    for (let i = -nu; i <= nu; i++) for (let j = -nv; j <= nv; j++){
+      const a = i*z.u, b = j*z.v, cx = z.x + ux*a - uy*b, cy = z.y + uy*a + ux*b;
+      if (!nearMap(cx, cy, 100) || zoneAt(cx, cy) !== zi) continue;
+      if (rnd() < 0.1) continue;                // Wiese
+      const poly = rectPts(cx, cy, ux, uy, z.u - 8, z.v - 8);
+      if ((gget(cx, cy) & BAD) || poly.some(p => gget(p[0], p[1]) & BAD)) continue;
+      f.fields.push({ r:[poly], s:(rnd()*4)|0 });
+    }
+  }
+
+  // --- 7) Die Orte selbst ---
+  for (let k = 0; k < towns.length; k++){
+    const t = towns[k];
+    await stage(`Baut ${t.name} (${k + 1} von ${towns.length}) …`);
+    const box = t.S/2 + 120;
+    const clip = pts => clipRuns(pts.map(p => [p[0] - t.x, p[1] - t.y]), p => Math.abs(p[0]) < box && Math.abs(p[1]) < box);
+    const ext = { waterLines:[], roads:[], rails:[] };
+    for (const l of rivers) clip(l.pts).forEach(pc => ext.waterLines.push({ pts:pc, w:l.w }));
+    for (const r of rroads) clip(r.pts).forEach(pc => ext.roads.push({ pts:pc, w:r.w, hw:r.hw }));
+    for (const r of f.rails) clip(r).forEach(pc => ext.rails.push(pc));
+    const tf = genTown(rnd, t.S, { embed:true, ext, shape:t.shape, name:t.name }).f;
+    const mv = pts => pts.map(p => [p[0] + t.x, p[1] + t.y]);
+    for (const cat of ['buildings', 'water', 'roadAreas', 'green', 'wood']) for (const rings of tf[cat]) f[cat].push(rings.map(mv));
+    for (const r of tf.roads) f.roads.push(Object.assign({}, r, { pts:mv(r.pts) }));
+    for (const b of tf.barriers) f.barriers.push(Object.assign({}, b, { pts:mv(b.pts) }));
+  }
+  for (const r of rroads) f.roads.push({ pts:r.pts, w:r.w, tunnel:false, major:true, small:false, hw:r.hw });
+
+  return {
+    f, name:'Großraum ' + towns[0].name,
+    towns: towns.map(t => ({ name:t.name, x:t.x, y:t.y, r:t.r, kind:t.kind }))
+  };
 }
 
 /* =====================================================================
-   3) RASTER: wo darf man laufen, wo sieht man durch?
-   base: 0 = blockiert (Haus, Wasser, Wand), 1 = Freifläche, 2 = Straße
-   opaque: 1 = Gebäude (blockiert Sicht und Schüsse)
+   3) KARTENINDEX: Kartenteile nach Ort einsortieren (256-m-Fächer),
+   damit Raster und Kacheln nur zeichnen, was dort wirklich liegt.
    ===================================================================== */
+const CATS = ['fields', 'green', 'wood', 'water', 'waterLines', 'rails', 'roadAreas', 'roads', 'barriers', 'buildings'];
+const LINE_CATS = { roads:1, waterLines:1, barriers:1, rails:1 };
 function makeCanvas(w, h){
   const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
 }
@@ -1157,172 +1545,450 @@ function traceLine(c, pts){
   for (let i=1; i<pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
 }
 
-function rasterize(f, size){
-  const W = Math.round(size/CELL), N = W*W;
-  const toCells = c => c.setTransform(1/CELL, 0, 0, 1/CELL, W/2, W/2);
-  const layer = bg => { const c = makeCanvas(W, W).getContext('2d', { willReadFrequently:true }); c.fillStyle = bg; c.fillRect(0, 0, W, W); toCells(c); c.lineCap = 'round'; c.lineJoin = 'round'; return c; };
-
-  // a) Hindernisse schwarz auf weiß, danach Straßen/Brücken wieder frei malen
-  const o = layer('#fff');
-  o.fillStyle = '#000'; o.strokeStyle = '#000';
-  f.water.forEach(p => { o.beginPath(); tracePoly(o, p); o.fill('evenodd'); });
-  f.waterLines.forEach(l => { o.lineWidth = l.w; o.beginPath(); traceLine(o, l.pts); o.stroke(); });
-  f.buildings.forEach(p => { o.beginPath(); tracePoly(o, p); o.fill('evenodd'); });
-  f.barriers.forEach(b => { o.lineWidth = Math.max(b.w, CELL*1.1); o.beginPath(); traceLine(o, b.pts); o.stroke(); });
-  o.fillStyle = '#fff'; o.strokeStyle = '#fff';
-  f.roadAreas.forEach(p => { o.beginPath(); tracePoly(o, p); o.fill('evenodd'); });
-  f.roads.forEach(r => { if (r.tunnel) return; o.lineWidth = Math.max(2.4, Math.min(r.w*0.7, 5)); o.beginPath(); traceLine(o, r.pts); o.stroke(); });
-  const od = o.getImageData(0, 0, W, W).data;
-
-  // b) Straßenmaske
-  const r = layer('#000');
-  r.fillStyle = '#fff'; r.strokeStyle = '#fff';
-  f.roadAreas.forEach(p => { r.beginPath(); tracePoly(r, p); r.fill('evenodd'); });
-  f.roads.forEach(x => { if (x.tunnel) return; r.lineWidth = x.w*0.85; r.beginPath(); traceLine(r, x.pts); r.stroke(); });
-  const rd = r.getImageData(0, 0, W, W).data;
-
-  // c) Sichtmaske: nur Gebäude
-  const v = layer('#fff');
-  v.fillStyle = '#000';
-  f.buildings.forEach(p => { v.beginPath(); tracePoly(v, p); v.fill('evenodd'); });
-  const vd = v.getImageData(0, 0, W, W).data;
-
-  const base = new Uint8Array(N), opaque = new Uint8Array(N);
-  for (let i=0; i<N; i++){
-    if (od[i*4] < 140) base[i] = 0;
-    else base[i] = rd[i*4] > 110 ? 2 : 1;
-    opaque[i] = vd[i*4] < 100 ? 1 : 0;
-  }
-  return { W, base, opaque };
-}
-
-// Größte zusammenhängende Lauffläche finden (nur dort entstehen Menschen)
-function largestComponent(W, block){
-  const N = W*W;
-  const label = new Int32Array(N);
-  const q = new Int32Array(N);
-  let best = 0, bestSize = 0, cur = 0;
-  for (let s=0; s<N; s++){
-    if (block[s] || label[s]) continue;
-    cur++;
-    let qh = 0, qt = 0; q[qt++] = s; label[s] = cur;
-    while (qh < qt){
-      const i = q[qh++], x = i % W, y = (i / W) | 0;
-      if (x > 0     && !block[i-1] && !label[i-1]){ label[i-1] = cur; q[qt++] = i-1; }
-      if (x < W-1   && !block[i+1] && !label[i+1]){ label[i+1] = cur; q[qt++] = i+1; }
-      if (y > 0     && !block[i-W] && !label[i-W]){ label[i-W] = cur; q[qt++] = i-W; }
-      if (y < W-1   && !block[i+W] && !label[i+W]){ label[i+W] = cur; q[qt++] = i+W; }
+function indexFeatures(f, size){
+  const B = 256, half = size/2, nb = Math.ceil(size/B), items = {}, buckets = {}, stamps = {};
+  for (const cat of CATS){
+    let list = f[cat] || [];
+    if (LINE_CATS[cat]){
+      // lange Linien (Flüsse, Autobahn) in Stücke teilen, damit eine Kachel nicht die ganze Linie zeichnet
+      const out = [];
+      for (const it of list){
+        const pts = cat === 'rails' ? it : it.pts;
+        if (pts.length <= 48){ out.push(it); continue; }
+        for (let s = 0; s < pts.length - 1; s += 40){
+          const seg = pts.slice(s, Math.min(pts.length, s + 41));
+          out.push(cat === 'rails' ? seg : Object.assign({}, it, { pts:seg }));
+        }
+      }
+      list = out;
     }
-    if (qt > bestSize){ bestSize = qt; best = cur; }
+    items[cat] = list;
+    const bk = buckets[cat] = new Array(nb*nb);
+    stamps[cat] = new Uint32Array(list.length);
+    for (let id = 0; id < list.length; id++){
+      const it = list[id];
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const scan = pts => { for (const p of pts){ if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; } };
+      if (LINE_CATS[cat]) scan(cat === 'rails' ? it : it.pts);
+      else (cat === 'fields' ? it.r : it).forEach(scan);
+      const pad = (it.w || 4)/2 + 3;
+      const bx0 = Math.max(0, Math.floor((x0 - pad + half)/B)), bx1 = Math.min(nb - 1, Math.floor((x1 + pad + half)/B));
+      const by0 = Math.max(0, Math.floor((y0 - pad + half)/B)), by1 = Math.min(nb - 1, Math.floor((y1 + pad + half)/B));
+      for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++){
+        const b = by*nb + bx;
+        (bk[b] || (bk[b] = [])).push(id);
+      }
+    }
   }
-  return { label, best, bestSize };
+  let gen = 0;
+  return {
+    items,
+    query(x0, y0, x1, y1){
+      gen++;
+      const bx0 = Math.max(0, Math.floor((x0 + half)/B)), bx1 = Math.min(nb - 1, Math.floor((x1 + half)/B));
+      const by0 = Math.max(0, Math.floor((y0 + half)/B)), by1 = Math.min(nb - 1, Math.floor((y1 + half)/B));
+      const out = {};
+      for (const cat of CATS){
+        const bk = buckets[cat], st = stamps[cat], list = items[cat], arr = out[cat] = [];
+        for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++){
+          const ids = bk[by*nb + bx];
+          if (!ids) continue;
+          for (let k = 0; k < ids.length; k++){ const id = ids[k]; if (st[id] !== gen){ st[id] = gen; arr.push(list[id]); } }
+        }
+      }
+      return out;
+    }
+  };
 }
 
 /* =====================================================================
-   4) KARTENBILD (einmal gezeichnet, dann nur noch verschoben/gezoomt)
+   4) RASTER: wo darf man laufen, wo sieht man durch?
+   Ein Byte pro 2-m-Zelle mit den Bits C_* (siehe oben). Gerastert wird in
+   Stücken von 2 × 2 km, so passen auch 16 km große Karten aufs Handy.
    ===================================================================== */
-function renderCache(f, size){
-  const s = Math.min(3, 2800/size);           // Pixel pro Meter im Cache
-  const px = Math.round(size*s);
-  const c = makeCanvas(px, px), g = c.getContext('2d');
-  g.fillStyle = COL.ground; g.fillRect(0, 0, px, px);
-  g.setTransform(s, 0, 0, s, px/2, px/2);
-  g.lineCap = 'round'; g.lineJoin = 'round';
-  // jede Fläche einzeln füllen, damit sich überlappende Flächen nicht gegenseitig aushöhlen
-  const fill = (list, col) => { g.fillStyle = col; list.forEach(p => { g.beginPath(); tracePoly(g, p); g.fill('evenodd'); }); };
-
-  fill(f.green, COL.green);
-  fill(f.wood, COL.wood);
-
-  // 100-m-Gitter
-  g.strokeStyle = COL.grid; g.lineWidth = 1/s; g.beginPath();
-  for (let v = -Math.floor(size/200)*100; v <= size/2; v += 100){
-    g.moveTo(v, -size/2); g.lineTo(v, size/2); g.moveTo(-size/2, v); g.lineTo(size/2, v);
+async function rasterize(size, idx, batch, onProg){
+  const W = Math.round(size/CELL), N = W*W, half = size/2;
+  const cell = new Uint8Array(N);
+  const T = Math.min(1024, W), nT = Math.ceil(W/T);
+  const c = makeCanvas(T, T).getContext('2d', { willReadFrequently:true });
+  let done = 0, lastYield = performance.now();
+  const polys = list => {
+    // generierte Häuser sind einfache Rechtecke: viele auf einmal füllen geht schneller
+    if (batch){ for (let k = 0; k < list.length; k += 1500){ c.beginPath(); for (let j = k; j < Math.min(list.length, k + 1500); j++) tracePoly(c, list[j]); c.fill(); } }
+    else list.forEach(p => { c.beginPath(); tracePoly(c, p); c.fill('evenodd'); });
+  };
+  for (let ty = 0; ty < nT; ty++) for (let tx = 0; tx < nT; tx++){
+    const cx0 = tx*T, cy0 = ty*T, tw = Math.min(T, W - cx0), th = Math.min(T, W - cy0);
+    const x0 = cx0*CELL - half, y0 = cy0*CELL - half;
+    const q = idx.query(x0 - 30, y0 - 30, x0 + tw*CELL + 30, y0 + th*CELL + 30);
+    const hasObs = q.water.length + q.waterLines.length + q.buildings.length + q.barriers.length > 0;
+    const hasRoad = q.roads.length + q.roadAreas.length > 0;
+    if (hasObs || hasRoad){
+      const clear = col => {
+        c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = col; c.fillRect(0, 0, T, T);
+        c.setTransform(1/CELL, 0, 0, 1/CELL, -x0/CELL, -y0/CELL);
+        c.lineCap = 'round'; c.lineJoin = 'round';
+      };
+      let od = null, rd = null, vd = null;
+      // a) Hindernisse schwarz auf weiß, danach Straßen/Brücken wieder frei malen
+      if (hasObs){
+        clear('#fff');
+        c.fillStyle = '#000'; c.strokeStyle = '#000';
+        q.water.forEach(p => { c.beginPath(); tracePoly(c, p); c.fill('evenodd'); });
+        q.waterLines.forEach(l => { c.lineWidth = l.w; c.beginPath(); traceLine(c, l.pts); c.stroke(); });
+        polys(q.buildings);
+        q.barriers.forEach(b => { c.lineWidth = Math.max(b.w, CELL*1.1); c.beginPath(); traceLine(c, b.pts); c.stroke(); });
+        c.fillStyle = '#fff'; c.strokeStyle = '#fff';
+        q.roadAreas.forEach(p => { c.beginPath(); tracePoly(c, p); c.fill('evenodd'); });
+        q.roads.forEach(r => { if (r.tunnel) return; c.lineWidth = Math.max(2.4, Math.min(r.w*0.7, 5)); c.beginPath(); traceLine(c, r.pts); c.stroke(); });
+        od = c.getImageData(0, 0, tw, th).data;
+      }
+      // b) Straßenmaske
+      if (hasRoad){
+        clear('#000');
+        c.fillStyle = '#fff'; c.strokeStyle = '#fff';
+        q.roadAreas.forEach(p => { c.beginPath(); tracePoly(c, p); c.fill('evenodd'); });
+        q.roads.forEach(r => { if (r.tunnel) return; c.lineWidth = r.w*0.85; c.beginPath(); traceLine(c, r.pts); c.stroke(); });
+        rd = c.getImageData(0, 0, tw, th).data;
+      }
+      // c) Sichtmaske: nur Gebäude
+      if (q.buildings.length){
+        clear('#fff');
+        c.fillStyle = '#000';
+        polys(q.buildings);
+        vd = c.getImageData(0, 0, tw, th).data;
+      }
+      for (let y = 0; y < th; y++){
+        let i = (cy0 + y)*W + cx0, k = y*tw*4;
+        for (let x = 0; x < tw; x++, i++, k += 4){
+          let v = 0;
+          if (od && od[k] < 140) v = C_SOLID | C_BLK;
+          else if (rd && rd[k] > 110) v = C_ROAD;
+          if (vd && vd[k] < 100) v |= C_OPQ;
+          cell[i] = v;
+        }
+      }
+    }
+    done++;
+    if (performance.now() - lastYield > 150){
+      if (onProg) onProg(done/(nT*nT));
+      await nextFrame();
+      lastYield = performance.now();
+    }
   }
+  // äußerster Zellring: fest (dann muss die Breitensuche nie prüfen, ob sie aus der Karte läuft)
+  for (let k = 0; k < W; k++){ cell[k] = cell[N - 1 - k] = cell[k*W] = cell[k*W + W - 1] = C_SOLID | C_BLK; }
+  return { W, cell };
+}
+
+// Warteschlange als Ringpuffer, wächst bei Bedarf (für Flutfüllung und Wegfelder)
+function growQ(q, qh, qt){
+  const n = new Int32Array(q.length*2), m = n.length - 1, om = q.length - 1;
+  for (let k = qh; k < qt; k++) n[k & m] = q[k & om];
+  return n;
+}
+
+// Größte zusammenhängende Lauffläche markieren (C_MAIN): nur dort entstehen Menschen
+function markMain(W, cell){
+  const N = W*W;
+  let q = new Int32Array(1 << 16), mask = q.length - 1;
+  const flood = (s, bit) => {
+    let qh = 0, qt = 1;
+    q[0] = s; cell[s] |= bit;
+    while (qh < qt){
+      const i = q[qh & mask]; qh++;
+      const x = i % W;
+      for (let k = 0; k < 4; k++){
+        let j;
+        if (k === 0){ if (x === 0) continue; j = i - 1; }
+        else if (k === 1){ if (x === W - 1) continue; j = i + 1; }
+        else if (k === 2){ if (i < W) continue; j = i - W; }
+        else { j = i + W; if (j >= N) continue; }
+        if (cell[j] & (C_BLK | bit)) continue;
+        cell[j] |= bit;
+        if (qt - qh > mask){ q = growQ(q, qh, qt); mask = q.length - 1; }
+        q[qt & mask] = j; qt++;
+      }
+    }
+    return qt;
+  };
+  let best = -1, bestSize = 0;
+  for (let s = 0; s < N; s++){
+    if (cell[s] & (C_BLK | C_TMP)) continue;
+    const n = flood(s, C_TMP);
+    if (n > bestSize){ bestSize = n; best = s; }
+  }
+  for (let i = 0; i < N; i++) cell[i] &= ~C_TMP;
+  if (best >= 0) flood(best, C_MAIN);
+  return bestSize;
+}
+
+/* =====================================================================
+   5) KARTENBILD: ein Übersichtsbild der ganzen Karte und darüber
+   Kacheln in Zoomstufen, die erst beim Hinsehen gezeichnet werden.
+   ===================================================================== */
+const TILE_PX = 512, TILE_PAD = 2, TILE_PPM = 4, TILE_MAX = 44;
+const tiles = new Map(), tilePool = [];
+let tileFrame = 0;
+
+function drawMap(g, q, ppm, bx0, by0, bx1, by1, size, batch){
+  const half = size/2;
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  g.fillStyle = COL.void; g.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
+  g.save();
+  g.beginPath(); g.rect(-half, -half, size, size); g.clip();
+  g.fillStyle = COL.ground; g.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
+  // jede Fläche einzeln füllen, damit sich überlappende Flächen nicht gegenseitig aushöhlen
+  const fillEach = (list, col) => { g.fillStyle = col; list.forEach(p => { g.beginPath(); tracePoly(g, p); g.fill('evenodd'); }); };
+
+  // Felder
+  if (q.fields.length) for (let s = 0; s < COL.fields.length; s++){
+    g.fillStyle = COL.fields[s]; g.beginPath();
+    for (const fl of q.fields) if (fl.s === s) tracePoly(g, fl.r);
+    g.fill();
+  }
+  fillEach(q.green, COL.green);
+  fillEach(q.wood, COL.wood);
+
+  // Gitter: 100 m, weit herausgezoomt 1 km
+  const gs = ppm >= 0.6 ? 100 : 1000;
+  const gx0 = Math.max(bx0, -half), gx1 = Math.min(bx1, half), gy0 = Math.max(by0, -half), gy1 = Math.min(by1, half);
+  g.strokeStyle = COL.grid; g.lineWidth = 1/ppm; g.beginPath();
+  for (let v = Math.ceil(gx0/gs)*gs; v <= gx1; v += gs){ g.moveTo(v, gy0); g.lineTo(v, gy1); }
+  for (let v = Math.ceil(gy0/gs)*gs; v <= gy1; v += gs){ g.moveTo(gx0, v); g.lineTo(gx1, v); }
   g.stroke();
 
-  // Wasser mit Uferlinie
+  // Wasser mit Uferlinie (Flüsse auch von weitem sichtbar)
+  const ww = w => w >= 6 ? Math.max(w, 1.2/ppm) : w;
   g.strokeStyle = COL.waterEdge;
-  f.waterLines.forEach(l => { g.lineWidth = l.w + 1.6; g.beginPath(); traceLine(g, l.pts); g.stroke(); });
-  g.lineWidth = 1.6; g.beginPath(); f.water.forEach(p => tracePoly(g, p)); g.stroke();
+  q.waterLines.forEach(l => { g.lineWidth = ww(l.w) + 1.6; g.beginPath(); traceLine(g, l.pts); g.stroke(); });
+  g.lineWidth = Math.max(1.6, 0.8/ppm); g.beginPath(); q.water.forEach(p => tracePoly(g, p)); g.stroke();
   g.strokeStyle = COL.water;
-  f.waterLines.forEach(l => { g.lineWidth = l.w; g.beginPath(); traceLine(g, l.pts); g.stroke(); });
-  fill(f.water, COL.water);
+  q.waterLines.forEach(l => { g.lineWidth = ww(l.w); g.beginPath(); traceLine(g, l.pts); g.stroke(); });
+  fillEach(q.water, COL.water);
 
   // Bahn
-  g.strokeStyle = COL.rail; g.lineWidth = 1.4; g.setLineDash([4, 3]);
-  g.beginPath(); f.rails.forEach(p => traceLine(g, p)); g.stroke(); g.setLineDash([]);
+  if (q.rails.length){
+    g.strokeStyle = COL.rail; g.lineWidth = Math.max(1.4, 0.9/ppm); g.setLineDash([Math.max(4, 4/ppm), Math.max(3, 3/ppm)]);
+    g.beginPath(); q.rails.forEach(p => traceLine(g, p)); g.stroke(); g.setLineDash([]);
+  }
 
   // Straßen: erst Kontur, dann Fläche (kleine zuerst, große obenauf)
-  const roads = f.roads.filter(r => !r.tunnel).sort((a, b) => a.w - b.w);
-  fill(f.roadAreas, COL.road);
+  const rw = r => r.small ? Math.max(1.6, r.w*0.75) : r.major ? Math.max(r.w, 1.3/ppm) : r.w;
+  const roads = q.roads.filter(r => !r.tunnel).sort((a, b) => a.w - b.w);
+  fillEach(q.roadAreas, COL.road);
   g.strokeStyle = COL.roadCase;
-  roads.forEach(r => { if (r.small) return; g.lineWidth = r.w + 1.4; g.beginPath(); traceLine(g, r.pts); g.stroke(); });
+  roads.forEach(r => { if (r.small) return; g.lineWidth = rw(r) + 1.4; g.beginPath(); traceLine(g, r.pts); g.stroke(); });
   roads.forEach(r => {
-    g.strokeStyle = r.small ? COL.path : r.major ? COL.roadMajor : COL.road;
-    g.lineWidth = r.small ? Math.max(1.6, r.w*0.75) : r.w;
+    g.strokeStyle = r.small ? COL.path : r.hw ? COL.roadHw : r.major ? COL.roadMajor : COL.road;
+    g.lineWidth = rw(r);
     g.beginPath(); traceLine(g, r.pts); g.stroke();
   });
 
-  // Mauern/Zäune aus OSM
-  f.barriers.forEach(b => {
+  // Mauern/Zäune aus der Karte
+  q.barriers.forEach(b => {
     const big = b.w >= 2;
     g.strokeStyle = big ? '#5a6774' : COL.barrier; g.lineWidth = big ? b.w : 0.9;
     g.beginPath(); traceLine(g, b.pts); g.stroke();
   });
 
-  // Häuser
-  fill(f.buildings, COL.bldg);
-  g.strokeStyle = COL.bldgEdge; g.lineWidth = Math.max(0.5, 0.9/s);
-  g.beginPath(); f.buildings.forEach(p => tracePoly(g, p)); g.stroke();
-  return c;
+  // Häuser (Kanten nur, wenn man sie auch sieht)
+  const edge = ppm >= 0.9;
+  g.fillStyle = COL.bldg; g.strokeStyle = COL.bldgEdge; g.lineWidth = Math.max(0.5, 0.9/ppm);
+  if (batch){
+    for (let k = 0; k < q.buildings.length; k += 1500){
+      g.beginPath();
+      for (let j = k; j < Math.min(q.buildings.length, k + 1500); j++) tracePoly(g, q.buildings[j]);
+      g.fill(); if (edge) g.stroke();
+    }
+  } else {
+    q.buildings.forEach(p => { g.beginPath(); tracePoly(g, p); g.fill('evenodd'); });
+    if (edge){ g.beginPath(); q.buildings.forEach(p => tracePoly(g, p)); g.stroke(); }
+  }
+  g.restore();
+}
+
+function makeOverview(idx, size, batch){
+  const ppm = Math.min(3, 2800/size), px = Math.round(size*ppm);
+  const c = makeCanvas(px, px), g = c.getContext('2d');
+  g.setTransform(ppm, 0, 0, ppm, px/2, px/2);
+  drawMap(g, idx.items, ppm, -size/2, -size/2, size/2, size/2, size, batch);
+  return { c, ppm, px };
+}
+
+const tileKey = (k, tx, ty) => k*1e8 + ty*1e4 + tx;
+function renderTile(k, tx, ty){
+  const ppm = TILE_PPM/(1 << k), tw = TILE_PX/ppm, pad = TILE_PAD/ppm;
+  const x0 = tx*tw - G.half, y0 = ty*tw - G.half;
+  const cv = tilePool.pop() || makeCanvas(TILE_PX + 2*TILE_PAD, TILE_PX + 2*TILE_PAD);
+  const g = cv.getContext('2d');
+  g.setTransform(ppm, 0, 0, ppm, (pad - x0)*ppm, (pad - y0)*ppm);
+  const q = G.idx.query(x0 - pad - 20, y0 - pad - 20, x0 + tw + pad + 20, y0 + tw + pad + 20);
+  drawMap(g, q, ppm, x0 - pad, y0 - pad, x0 + tw + pad, y0 + tw + pad, G.size, G.batch);
+  return cv;
+}
+function useTile(k, tx, ty){ const t = tiles.get(tileKey(k, tx, ty)); if (t) t.f = tileFrame; return t; }
+function storeTile(k, tx, ty, cv){
+  if (tiles.size >= TILE_MAX){
+    let oldKey = -1, oldF = Infinity;
+    for (const [key, t] of tiles) if (t.f < oldF){ oldF = t.f; oldKey = key; }
+    if (oldF < tileFrame){ tilePool.push(tiles.get(oldKey).c); tiles.delete(oldKey); }
+  }
+  tiles.set(tileKey(k, tx, ty), { c:cv, f:tileFrame });
+}
+function clearTiles(){
+  for (const t of tiles.values()) if (tilePool.length < 6) tilePool.push(t.c); else t.c.width = t.c.height = 0;
+  tiles.clear();
+}
+
+// Kartenbild für den sichtbaren Ausschnitt: Übersicht, darüber passende Kacheln
+function drawBase(){
+  const s = cam.s, sp = s*dpr, half = G.half, size = G.size;
+  const vx0 = Math.max(-half, -cam.x/s), vy0 = Math.max(-half, -cam.y/s);
+  const vx1 = Math.min(half, (VW - cam.x)/s), vy1 = Math.min(half, (VH - cam.y)/s);
+  if (vx1 <= vx0 || vy1 <= vy0) return;
+  const ov = G.ov, op = ov.ppm;
+  const sx0 = Math.max(0, Math.floor((vx0 + half)*op) - 1), sy0 = Math.max(0, Math.floor((vy0 + half)*op) - 1);
+  const sx1 = Math.min(ov.px, Math.ceil((vx1 + half)*op) + 1), sy1 = Math.min(ov.px, Math.ceil((vy1 + half)*op) + 1);
+  ctx.drawImage(ov.c, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0/op - half, sy0/op - half, (sx1 - sx0)/op, (sy1 - sy0)/op);
+  tileFrame++;
+  if (sp <= op*1.15) return;
+  const k = Math.max(0, Math.floor(Math.log2(TILE_PPM/sp)));
+  const ppm = TILE_PPM/(1 << k);
+  if (ppm <= op*1.15) return;
+  const tw = TILE_PX/ppm, nt = Math.ceil(size/tw);
+  const tx0 = Math.max(0, Math.floor((vx0 + half)/tw)), tx1 = Math.min(nt - 1, Math.floor((vx1 + half)/tw));
+  const ty0 = Math.max(0, Math.floor((vy0 + half)/tw)), ty1 = Math.min(nt - 1, Math.floor((vy1 + half)/tw));
+  const have = [], missing = [];
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++){
+    const t = useTile(k, tx, ty);
+    if (t) have.push([tx, ty, t]); else missing.push([tx, ty]);
+  }
+  // fehlende Kacheln zeichnen, die mittleren zuerst, höchstens ~10 ms pro Bild
+  if (missing.length){
+    const mx = ((vx0 + vx1)/2 + half)/tw - 0.5, my = ((vy0 + vy1)/2 + half)/tw - 0.5;
+    missing.sort((a, b) => ((a[0]-mx)**2 + (a[1]-my)**2) - ((b[0]-mx)**2 + (b[1]-my)**2));
+    const t0 = performance.now();
+    while (missing.length && performance.now() - t0 < 10){
+      const [tx, ty] = missing.shift();
+      storeTile(k, tx, ty, renderTile(k, tx, ty));
+      have.push([tx, ty, useTile(k, tx, ty)]);
+    }
+  }
+  const put = (cv, tx, ty, tws, pp) => ctx.drawImage(cv, TILE_PAD - 1, TILE_PAD - 1, TILE_PX + 2, TILE_PX + 2, tx*tws - half - 1/pp, ty*tws - half - 1/pp, tws + 2/pp, tws + 2/pp);
+  // noch fehlende: gröbere Kachel als Platzhalter, falls vorhanden
+  if (missing.length && ppm/2 > op*1.15){
+    const done = new Set();
+    for (const [tx, ty] of missing){
+      const px = tx >> 1, py = ty >> 1, key = tileKey(k + 1, px, py);
+      if (done.has(key)) continue;
+      done.add(key);
+      const p = useTile(k + 1, px, py);
+      if (p) put(p.c, px, py, tw*2, ppm/2);
+    }
+  }
+  for (const [tx, ty, t] of have) put(t.c, tx, ty, tw, ppm);
+}
+
+// Ortsnamen, wenn man weit herausgezoomt ist
+const LABEL_FONT = '"Barlow Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif';
+function drawLabels(){
+  if (!G.labels || cam.s > 0.9) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  const boxes = [];
+  for (const l of G.labels){
+    const rpx = l.r*cam.s;
+    if (rpx < 10 || rpx > Math.min(VW, VH)*0.6) continue;
+    let sx = cam.x + l.x*cam.s;
+    const sy = cam.y + l.y*cam.s;
+    if (sx < -60 || sx > VW + 60 || sy < -20 || sy > VH + 20) continue;
+    const fs = l.kind === 'city' ? 17 : l.kind === 'town' ? 14 : 12;
+    ctx.font = `${l.kind === 'village' ? 600 : 700} ${fs}px ${LABEL_FONT}`;
+    const txt = l.name.toUpperCase(), w = ctx.measureText(txt).width + 10, h = fs + 6;
+    if (w < VW - 8) sx = Math.min(VW - 4 - w/2, Math.max(4 + w/2, sx));
+    const b = [sx - w/2, sy - h/2, sx + w/2, sy + h/2];
+    if (boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])) continue;
+    boxes.push(b);
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(7,10,13,0.85)'; ctx.strokeText(txt, sx, sy);
+    ctx.fillStyle = l.kind === 'village' ? 'rgba(200,209,216,0.85)' : 'rgba(240,244,247,0.95)';
+    ctx.fillText(txt, sx, sy);
+  }
 }
 
 /* =====================================================================
-   5) SPIELZUSTAND
+   6) SPIELZUSTAND
    ===================================================================== */
 let G = null;               // aktuelles Spiel
-let lastMap = null;         // { f, size, name, humans } für Neustart
+let lastMap = null;         // { f, size, name, humans, … } für Neustart
 let tool = 'outbreak', lastBuild = 'wall', running = true, speedIdx = 0;
 const cam = { x:0, y:0, s:1, fit:1 };
 const DX = [1,-1,0,0,1,1,-1,-1], DY = [0,0,1,-1,1,-1,1,-1];
 
-function newHash(hw){ return { head:new Int32Array(hw*hw), next:new Int32Array(1024) }; }
+// Agenten-Gitter: 4-m-Fächer, das Muster wiederholt sich alle 1024 m (Abstände werden immer geprüft)
+const HB = 256, HMASK = HB - 1, HCELL = 4;
+function newHash(){ return { head:new Int32Array(HB*HB), next:new Int32Array(1024) }; }
 
-function newGame(f, size, name, humans){
-  const { W, base, opaque } = rasterize(f, size);
-  const N = W*W;
-  const block = new Uint8Array(N);
-  for (let i=0; i<N; i++) block[i] = base[i]===0 ? 1 : 0;
-  const comp = largestComponent(W, block);
-  if (comp.bestSize < 200) throw new Error('Hier gibt es kaum begehbare Wege. Wähle einen anderen Ort.');
-  const roadCells = [], openCells = [];
-  for (let i=0; i<N; i++){
-    if (comp.label[i] !== comp.best) continue;
-    (base[i]===2 ? roadCells : openCells).push(i);
-  }
-  const hw = Math.ceil(size/4);
+async function newGame(m, humans, say){
+  const f = m.f, size = m.size, batch = !!f.gen;
+  clearTiles();
+  await say('Ordne Kartendaten …');
+  const idx = indexFeatures(f, size);
+  const { W, cell } = await rasterize(size, idx, batch, p => say(`Berechne Laufwege … ${Math.round(p*100)} %`, true));
+  await say('Suche zusammenhängende Wege …');
+  const mainCount = markMain(W, cell);
+  if (mainCount < 200) throw new Error('Hier gibt es kaum begehbare Wege. Wähle einen anderen Ort.');
+  await say('Zeichne Karte …');
+  const ov = makeOverview(idx, size, batch);
+  const N = W*W, CW = Math.ceil(W/CS), NC = CW*CW;
+  const distH = new Uint8Array(N), distZ = new Uint8Array(N);
+  const order = { city:0, town:1, village:2 };
+  const towns = m.towns || null;
   G = {
-    f, size, half:size/2, name, W, N, base, opaque, block,
-    wallCount: new Uint8Array(N), towerCount: new Uint8Array(N),
-    roadCells: Int32Array.from(roadCells), openCells: Int32Array.from(openCells),
-    distH: new Int16Array(N), distZ: new Int16Array(N), queue: new Int32Array(N),
+    f, size, half:size/2, name:m.name, W, N, cell, mainCount, idx, batch, ov,
+    labels: towns ? towns.slice().sort((a, b) => order[a.kind] - order[b.kind] || b.r - a.r) : null,
+    zones: towns ? towns.map(t => ({ x:t.x, y:t.y, r:t.r*0.85, w:t.r*t.r })) : null,
+    wallN: new Map(), towerN: new Map(),
+    distH, distZ, q: new Int32Array(1 << 16),
+    CW, NC, zc: new Uint8Array(NC), hc: new Uint8Array(NC), zN: new Uint8Array(NC), hN: new Uint8Array(NC),
+    tA: new Uint8Array(NC), tB: new Uint8Array(NC), rH: new Uint8Array(NC), rZ: new Uint8Array(NC), tch: new Uint8Array(NC),
+    listH: [], listZ: [], fieldFlip: false, fieldSlow: false,
+    coldK: 1, coldAcc: new Float64Array(8), frameNo: 0, fieldNext: 0,
     agents: [], walls: [], towers: [], corpses: [], fx: [], tracers: [], bolts: [], parts: [],
     time: 0, fieldT: 0, started: false, ended: false, kills: 0, maxZ: 0, humans0: 0, _lastKills: -1,
-    hashSize: 4, hashW: hw, ph: newHash(hw), zh: newHash(hw),
-    cache: renderCache(f, size)
+    ph: newHash(), zh: newHash()
   };
+  G.zoneW = G.zones ? G.zones.reduce((s, z) => s + z.w, 0) : 0;
+  await say('Verteile Menschen …');
   spawnHumans(humans);
   return G;
 }
 
-function refreshBlock(i){ G.block[i] = (G.base[i]===0 || G.wallCount[i] || G.towerCount[i]) ? 1 : 0; }
+// Blockiert-Bit einer Zelle neu bestimmen (Haus/Wasser, Mauer, Turm)
+function refreshBlock(i){
+  const w = G.wallN.has(i), t = G.towerN.has(i);
+  const c = G.cell[i] & ~(C_BLK | C_WALL | C_TOWER);
+  G.cell[i] = c | (w ? C_WALL : 0) | (t ? C_TOWER : 0) | ((c & C_SOLID) || w || t ? C_BLK : 0);
+}
+function addCount(map, i, d){
+  const v = (map.get(i) || 0) + d;
+  if (v > 0) map.set(i, v); else map.delete(i);
+  refreshBlock(i);
+}
+function clearFields(){
+  G.distH.fill(0); G.distZ.fill(0);
+  G.listH = []; G.listZ = [];
+  G.zN.fill(0); G.hN.fill(0); G.rH.fill(0); G.rZ.fill(0); G.coldAcc.fill(0);
+}
 
 function resetGame(){
   if (!lastMap) return;
+  const walls = G.walls, towers = G.towers;
   G.agents = []; G.corpses = []; G.fx = []; G.tracers = []; G.bolts = []; G.parts = [];
-  G.walls = []; G.towers = []; G.wallCount.fill(0); G.towerCount.fill(0);
-  for (let i=0; i<G.N; i++) G.block[i] = G.base[i]===0 ? 1 : 0;
+  G.walls = []; G.towers = []; G.wallN.clear(); G.towerN.clear();
+  for (const w of walls) for (const i of w.cells) refreshBlock(i);
+  for (const t of towers) for (const i of t.cells) refreshBlock(i);
+  clearFields();
   G.time = 0; G.fieldT = 0; G.started = false; G.ended = false; G.kills = 0; G.maxZ = 0; G._lastKills = -1;
   spawnHumans(lastMap.humans);
   setTool('outbreak');
@@ -1336,7 +2002,7 @@ const cellIndex = (x, y) => {
   return iy*G.W + ix;
 };
 const cellCenter = i => [ (i % G.W + 0.5)*CELL - G.half, (((i / G.W) | 0) + 0.5)*CELL - G.half ];
-const free = (x, y) => { const i = cellIndex(x, y); return i >= 0 && !G.block[i]; };
+const free = (x, y) => { const i = cellIndex(x, y); return i >= 0 && !(G.cell[i] & C_BLK); };
 
 function nearestFree(x, y, maxR = 15){
   const W = G.W;
@@ -1348,7 +2014,7 @@ function nearestFree(x, y, maxR = 15){
       const ix = cx+dx, iy = cy+dy;
       if (ix < 0 || iy < 0 || ix >= W || iy >= W) continue;
       const i = iy*W+ix;
-      if (G.block[i]) continue;
+      if (G.cell[i] & C_BLK) continue;
       const d = dx*dx+dy*dy;
       if (d < bd){ bd = d; best = i; }
     }
@@ -1371,14 +2037,14 @@ function cellsAround(x, y, r){
 }
 
 /* =====================================================================
-   6) RUDEL: Menschen ziehen in Gruppen
+   7) RUDEL: Menschen ziehen in Gruppen
    Jede Gruppe hat einen Anführer, der eine Spur hinterlässt. Die anderen
    laufen diese Spur nach, halten Abstand und rücken nebeneinander auf.
    Sieht ein Mitglied Zombies, gerät die ganze Gruppe in Panik.
    ===================================================================== */
 function newHuman(x, y){
   return { t:H, x, y, h:rand()*TAU, turn:rand()*3, idle: rand()<0.25 ? rand()*8 : 0, alive:true,
-           g:null, rank:0, tc:0, joinT:rand()*2, stuck:0, px:x, py:y };
+           g:null, rank:0, tc:0, joinT:rand()*2, stuck:0, px:x, py:y, cg:(rand()*8)|0 };
 }
 function makeGroup(leader){
   const g = { leader, members:[leader], trail:[[leader.x, leader.y]], base:0, panic:0 };
@@ -1406,16 +2072,36 @@ function removeFromGroup(a){
 }
 function leaveGroup(a){ removeFromGroup(a); makeGroup(a); }
 
+// Zufällige begehbare Startzelle. In Regionen meist in einem Ort (nach Größe gewichtet).
+function spawnCell(useRoad){
+  const g = G, W = g.W, cell = g.cell;
+  for (let t = 0; t < 600; t++){
+    let ix, iy;
+    if (g.zones && rand() < 0.97){
+      let r = rand()*g.zoneW, z = g.zones[0];
+      for (const q of g.zones){ r -= q.w; if (r <= 0){ z = q; break; } }
+      const a = rand()*TAU, d = Math.sqrt(rand())*z.r;
+      ix = Math.floor((z.x + Math.cos(a)*d + g.half)/CELL); iy = Math.floor((z.y + Math.sin(a)*d + g.half)/CELL);
+      if (ix < 0 || iy < 0 || ix >= W || iy >= W) continue;
+    } else { ix = (rand()*W)|0; iy = (rand()*W)|0; }
+    const c = cell[iy*W + ix];
+    if (!(c & C_MAIN)) continue;
+    if (t < 400 && !(c & C_ROAD) === useRoad) continue;
+    return iy*W + ix;
+  }
+  for (let k = 0, s = (rand()*g.N)|0; k < g.N; k++){ const i = (s + k) % g.N; if (cell[i] & C_MAIN) return i; }
+  return -1;
+}
+
 function spawnHumans(n){
   const g = G;
-  const total = g.roadCells.length + g.openCells.length;
-  n = Math.min(n, Math.floor(total/3));
+  n = Math.min(n, Math.floor(g.mainCount/3));
   let made = 0;
   while (made < n){
     const size = Math.min(n - made, rand() < 0.18 ? 1 : 2 + Math.floor(rand()*6));
-    const useRoad = g.roadCells.length && (rand() < 0.8 || !g.openCells.length);
-    const arr = useRoad ? g.roadCells : g.openCells;
-    const [cx, cy] = cellCenter(arr[(rand()*arr.length)|0]);
+    const ci = spawnCell(rand() < 0.8);
+    if (ci < 0) break;
+    const [cx, cy] = cellCenter(ci);
     const leader = newHuman(cx + (rand()-0.5)*1.5, cy + (rand()-0.5)*1.5);
     g.agents.push(leader);
     const grp = makeGroup(leader);
@@ -1432,7 +2118,7 @@ function spawnHumans(n){
     }
     made += size;
   }
-  g.humans0 = n;
+  g.humans0 = made;
 }
 
 function recordTrail(a){
@@ -1446,7 +2132,7 @@ function recordTrail(a){
 function fleeStep(a, i, dt, speed){
   if (i < 0) return false;
   const j = bestNeighbor(G.distZ, i, true);
-  if (j >= 0 && G.distZ[j] > G.distZ[i]){
+  if (j >= 0 && dv(G.distZ, j) > dv(G.distZ, i)){
     const [tx, ty] = cellCenter(j);
     steerTo(a, tx + (rand()-0.5)*0.6, ty + (rand()-0.5)*0.6, speed, dt);
     a.idle = 0;
@@ -1457,7 +2143,7 @@ function fleeStep(a, i, dt, speed){
 
 function updHuman(a, dt){
   const i = cellIndex(a.x, a.y);
-  const dz = (i >= 0 && G.started) ? G.distZ[i] : INF;
+  const dz = (i >= 0 && G.started) ? dv(G.distZ, i) : FAR;
   const g = a.g;
   a.joinT -= dt;
   if (dz < HUMAN_FEAR) g.panic = PANIC_TIME;
@@ -1565,60 +2251,116 @@ function updFollower(a, dt){
 }
 
 /* =====================================================================
-   7) WEGFELDER (Breitensuche über das Raster)
+   8) WEGFELDER (Breitensuche über das Raster)
    distH: Laufweg-Abstand zum nächsten Menschen/Soldaten (für Zombies)
    distZ: Laufweg-Abstand zum nächsten Zombie (für fliehende Menschen)
+   Gerechnet wird nur in 128-m-Blöcken, in denen sich Zombies und Menschen
+   nahekommen: an der Front. So bleibt es auch auf 16-km-Karten schnell.
    ===================================================================== */
-function bfs(dist, type, cutoff){
-  const g = G, W = g.W, block = g.block, q = g.queue;
-  dist.fill(INF);
-  let qh = 0, qt = 0;
+function chunkAt(x, y){
+  const g = G, s = CELL*CS, cx = Math.floor((x + g.half)/s), cy = Math.floor((y + g.half)/s);
+  return (cx < 0 || cy < 0 || cx >= g.CW || cy >= g.CW) ? -1 : cy*g.CW + cx;
+}
+function dilate(src, dst, r){
+  const CW = G.CW;
+  dst.fill(0);
+  for (let c = 0; c < src.length; c++){
+    if (!src[c]) continue;
+    const cx = c % CW, cy = (c / CW) | 0;
+    const x0 = Math.max(0, cx - r), x1 = Math.min(CW - 1, cx + r), y1 = Math.min(CW - 1, cy + r);
+    for (let y = Math.max(0, cy - r); y <= y1; y++) dst.fill(1, y*CW + x0, y*CW + x1 + 1);
+  }
+}
+function clearChunk(dist, c){
+  const g = G, W = g.W, x0 = (c % g.CW)*CS, y0 = ((c / g.CW) | 0)*CS, x1 = Math.min(W, x0 + CS), y1 = Math.min(W, y0 + CS);
+  for (let y = y0; y < y1; y++) dist.fill(0, y*W + x0, y*W + x1);
+}
+
+function bfs(dist, type, cutoff, list, inR){
+  const g = G, W = g.W, CW = g.CW, cell = g.cell, tch = g.tch;
+  for (const c of list) clearChunk(dist, c);
+  list.length = 0;
+  tch.fill(0);
+  let q = g.q, mask = q.length - 1, qh = 0, qt = 0;
   for (const a of g.agents){
     if (!a.alive) continue;
     if (type === Z ? a.t !== Z : a.t === Z) continue;
     const i = cellIndex(a.x, a.y);
-    if (i < 0 || block[i] || dist[i] === 0) continue;
-    dist[i] = 0; q[qt++] = i;
+    if (i < 0 || (cell[i] & C_BLK) || dist[i] === 1) continue;
+    const c = (((i / W) | 0) >> 6)*CW + ((i % W) >> 6);
+    if (!inR[c]) continue;
+    if (!tch[c]){ tch[c] = 1; list.push(c); }
+    dist[i] = 1;
+    if (qt - qh > mask){ q = growQ(q, qh, qt); mask = q.length - 1; }
+    q[qt & mask] = i; qt++;
   }
+  // Nachbarn als Versatz; der Kartenrand ist fest, also bleibt j immer in der Karte
+  const OFF = g.OFF || (g.OFF = Int32Array.from(DX.map((dx, k) => DY[k]*W + dx)));
   while (qh < qt){
-    const i = q[qh++], d = dist[i];
-    if (d >= cutoff) continue;
-    const x = i % W, y = (i / W) | 0;
+    const i = q[qh & mask]; qh++;
+    const sd = dist[i];                 // gespeichert: Abstand + 1
+    if (sd > cutoff) continue;
+    const x = i % W, y = (i - x)/W, cx = x >> 6, cy = y >> 6;
     for (let k=0; k<8; k++){
+      const j = i + OFF[k];
+      if (dist[j] !== 0 || (cell[j] & C_BLK)) continue;
+      if (k >= 4 && ((cell[i + DX[k]] | cell[i + DY[k]*W]) & C_BLK)) continue;   // keine Ecken schneiden
       const nx = x + DX[k], ny = y + DY[k];
-      if (nx < 0 || ny < 0 || nx >= W || ny >= W) continue;
-      const j = ny*W + nx;
-      if (dist[j] !== INF || block[j]) continue;
-      if (k >= 4 && (block[y*W+nx] || block[ny*W+x])) continue;   // keine Ecken schneiden
-      dist[j] = d + 1; q[qt++] = j;
+      const c = ((nx >> 6) === cx && (ny >> 6) === cy) ? cy*CW + cx : (ny >> 6)*CW + (nx >> 6);
+      if (!inR[c]) continue;
+      if (!tch[c]){ tch[c] = 1; list.push(c); }
+      dist[j] = sd + 1;
+      if (qt - qh > mask){ q = growQ(q, qh, qt); mask = q.length - 1; }
+      q[qt & mask] = j; qt++;
     }
   }
+  g.q = q;
 }
 
 function updateFields(){
-  bfs(G.distH, H, ZOMBIE_SENSE + 2);
-  bfs(G.distZ, Z, LEADER_SIGHT + 1);
+  const g = G, t0 = performance.now();
+  g.zc.fill(0); g.hc.fill(0);
+  for (const a of g.agents){
+    if (!a.alive) continue;
+    const c = chunkAt(a.x, a.y);
+    if (c < 0) continue;
+    if (a.t === Z) g.zc[c] = 1; else g.hc[c] = 1;
+  }
+  // zN: höchstens einen Block (128 m) bis zum nächsten Zombie. Dort laufen Menschen in voller Genauigkeit.
+  dilate(g.zc, g.zN, 1);
+  dilate(g.hc, g.hN, 1);
+  // Gerechnet wird nur um Blöcke, in denen sich Zombies und Menschen nahekommen.
+  // Ein Block ist breiter als jede Witterung, darum reicht ein Block Rand.
+  for (let c = 0; c < g.NC; c++){ g.tA[c] = g.zc[c] & g.hN[c]; g.tB[c] = g.hc[c] & g.zN[c]; }
+  dilate(g.tA, g.rH, 1);
+  dilate(g.tB, g.rZ, 1);
+  // Wird es zu teuer, wechseln sich die beiden Felder ab
+  const both = !g.fieldSlow;
+  if (both || g.fieldFlip) bfs(g.distH, H, ZOMBIE_SENSE + 2, g.listH, g.rH);
+  if (both || !g.fieldFlip) bfs(g.distZ, Z, LEADER_SIGHT + 1, g.listZ, g.rZ);
+  g.fieldFlip = !g.fieldFlip;
+  g.fieldSlow = performance.now() - t0 > 7;
 }
 
 // Nachbarzelle mit bestem Feldwert (min für Jagd, max für Flucht)
 function bestNeighbor(dist, i, wantMax){
-  const g = G, W = g.W, block = g.block;
+  const g = G, W = g.W, cell = g.cell;
   const x = i % W, y = (i / W) | 0;
-  let best = -1, bv = wantMax ? -1 : INF + 1;
+  let best = -1, bv = wantMax ? -1 : FAR + 1;
   for (let k=0; k<8; k++){
     const nx = x + DX[k], ny = y + DY[k];
     if (nx < 0 || ny < 0 || nx >= W || ny >= W) continue;
     const j = ny*W + nx;
-    if (block[j]) continue;
-    if (k >= 4 && (block[y*W+nx] || block[ny*W+x])) continue;
-    const v = dist[j] + (k >= 4 ? 0.4 : 0) * (wantMax ? -1 : 1);   // gerade Schritte leicht bevorzugen
+    if (cell[j] & C_BLK) continue;
+    if (k >= 4 && ((cell[y*W+nx] | cell[ny*W+x]) & C_BLK)) continue;
+    const v = dv(dist, j) + (k >= 4 ? 0.4 : 0) * (wantMax ? -1 : 1);   // gerade Schritte leicht bevorzugen
     if (wantMax ? v > bv : v < bv){ bv = v; best = j; }
   }
   return best;
 }
 
 /* =====================================================================
-   8) BEWEGUNG & KAMPF
+   9) BEWEGUNG & KAMPF
    ===================================================================== */
 function moveBy(a, dx, dy){
   // Steht der Agent in einer gerade gebauten Mauer, darf er sich herausbewegen
@@ -1648,8 +2390,8 @@ function pickHeading(a, roadPref){
     if (!free(a.x + cx*2.5, a.y + cy*2.5)) continue;
     let sc = rand()*1.1 + Math.cos(h - a.h)*0.9;
     const j = cellIndex(a.x + cx*9, a.y + cy*9);
-    if (j < 0 || G.block[j]) sc -= 1.2;
-    else if (roadPref && G.base[j] === 2) sc += 1.6;
+    if (j < 0 || (G.cell[j] & C_BLK)) sc -= 1.2;
+    else if (roadPref && (G.cell[j] & C_ROAD)) sc += 1.6;
     if (sc > best){ best = sc; bestH = h; }
   }
   if (best === -1e9) bestH = rand()*TAU;
@@ -1678,14 +2420,14 @@ function updZombie(a, dt){
   if (a.burn > 0){ a.burn -= dt; hurt(a, BURN_DPS*dt, 'flame'); if (!a.alive) return; }
   if (a.stun > 0){ a.stun -= dt; return; }
   const i = cellIndex(a.x, a.y);
-  const d = i >= 0 ? G.distH[i] : INF;
+  const d = i >= 0 ? dv(G.distH, i) : FAR;
   if (d <= 3){
     const p = nearestIn(G.ph, a.x, a.y, 9, null);
     if (p){ steerTo(a, p.x, p.y, ZOMBIE_SPEED, dt); return; }
   }
   if (d < ZOMBIE_SENSE){
     const j = bestNeighbor(G.distH, i, false);
-    if (j >= 0 && G.distH[j] < d){
+    if (j >= 0 && dv(G.distH, j) < d){
       const [tx, ty] = cellCenter(j);
       steerTo(a, tx, ty, ZOMBIE_SPEED, dt);
       return;
@@ -1700,8 +2442,8 @@ function los(x0, y0, x1, y1, overWalls){
   for (let k=1; k<n; k++){
     const t = k/n;
     const i = cellIndex(x0 + (x1-x0)*t, y0 + (y1-y0)*t);
-    if (i < 0 || G.opaque[i]) return false;
-    if (!overWalls && G.wallCount[i]) return false;
+    if (i < 0 || (G.cell[i] & C_OPQ)) return false;
+    if (!overWalls && (G.cell[i] & C_WALL)) return false;
   }
   return true;
 }
@@ -1767,24 +2509,25 @@ function updTesla(t, dt){
 
 // Räumliche Gitter: ph = Beute (Menschen + Soldaten), zh = Zombies
 function buildHash(hh, test){
-  const g = G, hs = g.hashSize, hw = g.hashW;
+  const g = G, half = g.half;
   if (hh.next.length < g.agents.length) hh.next = new Int32Array(g.agents.length*2);
   hh.head.fill(-1);
   for (let k=0; k<g.agents.length; k++){
     const a = g.agents[k];
     if (!a.alive || !test(a)) continue;
-    const bx = Math.min(hw-1, Math.max(0, Math.floor((a.x + g.half)/hs)));
-    const by = Math.min(hw-1, Math.max(0, Math.floor((a.y + g.half)/hs)));
-    const b = by*hw + bx;
+    const b = ((Math.floor((a.y + half)/HCELL) & HMASK) << 8) | (Math.floor((a.x + half)/HCELL) & HMASK);
     hh.next[k] = hh.head[b]; hh.head[b] = k;
   }
 }
 function forEachIn(hh, x, y, r, fn){
-  const g = G, hs = g.hashSize, hw = g.hashW;
-  const x0 = Math.max(0, Math.floor((x - r + g.half)/hs)), x1 = Math.min(hw-1, Math.floor((x + r + g.half)/hs));
-  const y0 = Math.max(0, Math.floor((y - r + g.half)/hs)), y1 = Math.min(hw-1, Math.floor((y + r + g.half)/hs));
-  for (let yy=y0; yy<=y1; yy++) for (let xx=x0; xx<=x1; xx++){
-    for (let k = hh.head[yy*hw+xx]; k !== -1; k = hh.next[k]) fn(g.agents[k]);
+  const g = G, half = g.half, agents = g.agents;
+  const x0 = Math.floor((x - r + half)/HCELL), x1 = Math.floor((x + r + half)/HCELL);
+  const y0 = Math.floor((y - r + half)/HCELL), y1 = Math.floor((y + r + half)/HCELL);
+  for (let yy = y0; yy <= y1; yy++){
+    const row = (yy & HMASK) << 8;
+    for (let xx = x0; xx <= x1; xx++){
+      for (let k = hh.head[row | (xx & HMASK)]; k !== -1; k = hh.next[k]) fn(agents[k]);
+    }
   }
 }
 // nächster passender Agent; Beute-Gitter liefert nur Menschen/Soldaten, Zombie-Gitter nur Zombies
@@ -1816,13 +2559,26 @@ function bites(){
   }
 }
 
-function step(dt){
+// Menschen weit weg von Zombies (und nicht groß im Bild) werden seltener gerechnet:
+// coldDt > 0 nur im ersten Teilschritt eines Bildes, und nur für Gruppe coldSel von G.coldK.
+function step(dt, coldDt, coldSel){
   const g = G;
   buildHash(g.ph, a => a.t !== Z);
   buildHash(g.zh, a => a.t === Z);
+  const hot = g.started ? g.zN : null, CW = g.CW, cs = CELL*CS, half = g.half, K = g.coldK;
+  // beim Hineinzoomen laufen alle sichtbaren Menschen flüssig
+  const vs = cam.s >= 0.8, vx0 = -cam.x/cam.s - 10, vy0 = -cam.y/cam.s - 10, vx1 = (VW - cam.x)/cam.s + 10, vy1 = (VH - cam.y)/cam.s + 10;
   for (const a of g.agents){
     if (!a.alive) continue;
-    if (a.t === H) updHuman(a, dt);
+    if (a.t === H){
+      let near = vs && a.x > vx0 && a.x < vx1 && a.y > vy0 && a.y < vy1;
+      if (!near && hot){
+        const cx = Math.floor((a.x + half)/cs), cy = Math.floor((a.y + half)/cs);
+        near = cx >= 0 && cy >= 0 && cx < CW && cy < CW && hot[cy*CW + cx] === 1;
+      }
+      if (near) updHuman(a, dt);
+      else if (coldDt > 0 && a.cg % K === coldSel) for (let t = coldDt; t > 1e-6; t -= COLD_STEP) updHuman(a, Math.min(COLD_STEP, t));
+    }
     else if (a.t === Z) updZombie(a, dt);
     else updSoldier(a, dt);
   }
@@ -1835,10 +2591,10 @@ function step(dt){
 }
 
 /* =====================================================================
-   9) BAUEN: Ausbruch, Mauern, Soldaten, Türme, Abriss
+   10) BAUEN: Ausbruch, Mauern, Soldaten, Türme, Abriss
    ===================================================================== */
 function placeOutbreak(wx, wy){
-  const i = nearestFree(wx, wy);
+  const i = nearestFree(wx, wy, Math.max(15, Math.ceil(12/cam.s/CELL)));
   if (i < 0){ flashHint('Dort ist kein begehbarer Boden. Tippe auf eine Straße.'); return; }
   const [cx, cy] = cellCenter(i);
   const now = performance.now();
@@ -1871,13 +2627,13 @@ function placeTower(type, wx, wy){
   const [cx, cy] = cellCenter(i);
   for (const t of G.towers) if (Math.hypot(t.x-cx, t.y-cy) < TOWER_R*2.2){ flashHint('Hier steht schon ein Turm.'); return; }
   const cells = cellsAround(cx, cy, TOWER_R);
-  cells.forEach(c => { G.towerCount[c]++; G.block[c] = 1; });
+  cells.forEach(c => addCount(G.towerN, c, 1));
   G.towers.push({ type, x:cx, y:cy, cells, h:-Math.PI/2, cd:0, retarget:0, target:null, firing:false, flash:0 });
   G.fieldT = 0;
 }
 
 function removeTower(t){
-  t.cells.forEach(c => { G.towerCount[c]--; refreshBlock(c); });
+  t.cells.forEach(c => addCount(G.towerN, c, -1));
   G.towers.splice(G.towers.indexOf(t), 1);
   G.fieldT = 0;
 }
@@ -1894,13 +2650,13 @@ function addWall(pts){
     for (let s=0; s<=n; s++) cellsAround(x0 + (x1-x0)*s/n, y0 + (y1-y0)*s/n, WALL_THICK).forEach(c => set.add(c));
   }
   const cells = Int32Array.from(set);
-  cells.forEach(i => { G.wallCount[i]++; G.block[i] = 1; });
+  cells.forEach(i => addCount(G.wallN, i, 1));
   G.walls.push({ pts, cells, len });
   G.fieldT = 0;
 }
 
 function removeWall(w){
-  w.cells.forEach(i => { G.wallCount[i]--; refreshBlock(i); });
+  w.cells.forEach(i => addCount(G.wallN, i, -1));
   G.walls.splice(G.walls.indexOf(w), 1);
   G.fieldT = 0;
 }
@@ -1937,11 +2693,19 @@ function segDist(px, py, a, b){
 }
 
 /* =====================================================================
-   10) ZEICHNEN
+   11) ZEICHNEN
    ===================================================================== */
 function circles(list, rad){
   ctx.beginPath();
   for (const a of list){ ctx.moveTo(a.x + rad, a.y); ctx.arc(a.x, a.y, rad, 0, TAU); }
+}
+// Punkte: sind es sehr viele kleine, werden Quadrate gezeichnet (viel schneller als Kreise)
+function dots(list, rad, many){
+  if (list.length > (many || 2500) && rad*cam.s < 6){
+    const d = rad*1.8;
+    ctx.beginPath();
+    for (const a of list) ctx.rect(a.x - d/2, a.y - d/2, d, d);
+  } else circles(list, rad);
 }
 
 
@@ -2011,7 +2775,7 @@ function updParts(rdt){
     const f = Math.exp(-p.drag*rdt);
     p.vx *= f; p.vy *= f;
     p.x += p.vx*rdt; p.y += p.vy*rdt;
-    if (p.k === 0){ const c = cellIndex(p.x, p.y); if (c < 0 || G.opaque[c]) continue; }   // Flammen enden an Hauswänden
+    if (p.k === 0){ const c = cellIndex(p.x, p.y); if (c < 0 || (G.cell[c] & C_OPQ)) continue; }   // Flammen enden an Hauswänden
     ps[w++] = p;
   }
   ps.length = w;
@@ -2047,7 +2811,7 @@ function render(now, rdt){
   const s = cam.s;
   ctx.setTransform(dpr*s, 0, 0, dpr*s, dpr*cam.x, dpr*cam.y);
   ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(G.cache, -G.half, -G.half, G.size, G.size);
+  drawBase();
   ctx.strokeStyle = COL.frame; ctx.lineWidth = 1.5/s;
   ctx.strokeRect(-G.half, -G.half, G.size, G.size);
 
@@ -2056,7 +2820,9 @@ function render(now, rdt){
   // sichtbarer Ausschnitt in Metern (zum Aussortieren)
   const vx0 = -cam.x/s - 30, vy0 = -cam.y/s - 30, vx1 = (VW-cam.x)/s + 30, vy1 = (VH-cam.y)/s + 30;
   const vis = a => a.x > vx0 && a.x < vx1 && a.y > vy0 && a.y < vy1;
-  const r = Math.max(0.8, 2.1/s);
+  // Punktgröße: 2,1 px, weit herausgezoomt kleiner, damit volle Städte nicht zu weißen Flecken werden
+  const rpx = s >= 0.2 ? 2.1 : Math.max(0.75, 2.1 - 0.9*Math.log2(0.2/s));
+  const r = Math.max(0.8, rpx/s);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
   // Mauern
@@ -2076,8 +2842,8 @@ function render(now, rdt){
   // Erledigte Zombies
   if (G.corpses.length){
     const cr = r*0.8;
-    ctx.fillStyle = COL.corpse; circles(G.corpses.filter(c => !c.ash), cr); ctx.fill();
-    ctx.fillStyle = COL.ash; circles(G.corpses.filter(c => c.ash), cr); ctx.fill();
+    ctx.fillStyle = COL.corpse; dots(G.corpses.filter(c => !c.ash), cr, 300); ctx.fill();
+    ctx.fillStyle = COL.ash; dots(G.corpses.filter(c => c.ash), cr, 300); ctx.fill();
   }
 
   const hs = [], zs = [], ss = [];
@@ -2119,14 +2885,14 @@ function render(now, rdt){
   }
 
   // Zombie-Schein, Brand
-  ctx.fillStyle = COL.zombieGlow; circles(zs, r*2.6); ctx.fill();
+  ctx.fillStyle = COL.zombieGlow; dots(zs, r*2.6, 5000); ctx.fill();
   const burning = zs.filter(z => z.burn > 0);
   if (burning.length){
     ctx.fillStyle = `rgba(255,${100 + (rand()*60|0)},40,0.6)`; circles(burning, Math.max(r*1.9, 4.5/s)*(0.85 + rand()*0.3)); ctx.fill();
   }
   // Menschen, Zombies
-  ctx.fillStyle = COL.human; circles(hs, r); ctx.fill();
-  ctx.fillStyle = COL.zombie; circles(zs, r); ctx.fill();
+  ctx.fillStyle = COL.human; dots(hs, r); ctx.fill();
+  ctx.fillStyle = COL.zombie; dots(zs, r); ctx.fill();
   const stunned = zs.filter(z => z.stun > 0);
   if (stunned.length){ ctx.strokeStyle = 'rgba(160,236,255,0.9)'; ctx.lineWidth = Math.max(0.3, 1.2/s); circles(stunned, r*1.5); ctx.stroke(); }
   // Soldaten
@@ -2205,21 +2971,22 @@ function render(now, rdt){
   if (G.fx.length){
     G.fx = G.fx.filter(e => now - e.t < (e.big ? 1600 : 700));
     for (const e of G.fx){
-      const life = e.big ? 1600 : 700, p = (now - e.t)/life;
+      const life = e.big ? 1600 : 700, p = Math.max(0, (now - e.t)/life);
       const rr = e.big ? r*3 + p*40 : r + p*r*6;
       ctx.strokeStyle = `rgba(92,255,122,${(1-p).toFixed(2)})`;
       ctx.lineWidth = (e.big ? 2.5 : 1.4)/s;
       ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, TAU); ctx.stroke();
     }
   }
+  drawLabels();
 }
 
 /* =====================================================================
-   11) KAMERA & EINGABE
+   12) KAMERA & EINGABE
    ===================================================================== */
 function fitCamera(){
   const avail = Math.min(VW - 20, VH - 250);
-  cam.fit = Math.max(0.05, avail / G.size);
+  cam.fit = Math.max(0.004, avail / G.size);
   cam.s = cam.fit;
   cam.x = VW/2; cam.y = VH/2 + 10;
 }
@@ -2235,8 +3002,29 @@ const toWorld = (sx, sy) => [ (sx - cam.x)/cam.s, (sy - cam.y)/cam.s ];
 const pointers = new Map();
 let gesture = null, wallDraft = null;
 
+// Doppeltippen in der Ansicht zoomt hinein (spart auf großen Karten viele Gesten)
+let lastTap = { t:0, x:0, y:0 }, camAnim = null;
+function doubleTap(sx, sy){
+  const now = performance.now();
+  if (now - lastTap.t < 350 && Math.hypot(sx - lastTap.x, sy - lastTap.y) < 40){ zoomAt(sx, sy, 2.5); lastTap.t = 0; }
+  else lastTap = { t:now, x:sx, y:sy };
+}
+function zoomAt(sx, sy, k){
+  const [wx, wy] = toWorld(sx, sy);
+  camAnim = { t0:performance.now(), s0:cam.s, s1:Math.max(cam.fit*0.6, Math.min(14, cam.s*k)), wx, wy, sx, sy };
+}
+function stepCamAnim(now){
+  if (!camAnim) return;
+  const p = Math.min(1, (now - camAnim.t0)/240), e = 1 - (1 - p)**3;
+  cam.s = camAnim.s0*Math.pow(camAnim.s1/camAnim.s0, e);
+  cam.x = camAnim.sx - camAnim.wx*cam.s; cam.y = camAnim.sy - camAnim.wy*cam.s;
+  clampCam();
+  if (p >= 1) camAnim = null;
+}
+
 cv.addEventListener('pointerdown', e => {
   if (!G) return;
+  camAnim = null;
   cv.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
   if (pointers.size === 1){
@@ -2288,7 +3076,10 @@ function endPointer(e){
       gesture = { mode:'pan', sx:p.x, sy:p.y, lx:p.x, ly:p.y, moved:true };
     } else if (!pointers.size) gesture = null;
   } else if (gesture.mode === 'pan'){
-    if (!gesture.moved && e.type === 'pointerup') tapAt(e.clientX, e.clientY);
+    if (!gesture.moved && e.type === 'pointerup'){
+      if (tool === 'pan') doubleTap(e.clientX, e.clientY);
+      else tapAt(e.clientX, e.clientY);
+    }
     gesture = null;
   }
 }
@@ -2297,6 +3088,7 @@ cv.addEventListener('pointercancel', endPointer);
 cv.addEventListener('wheel', e => {
   if (!G) return;
   e.preventDefault();
+  camAnim = null;
   const [wx, wy] = toWorld(e.clientX, e.clientY);
   cam.s *= Math.exp(-e.deltaY*0.0015);
   clampCam();
@@ -2324,10 +3116,10 @@ function simplify(pts){
 }
 
 /* =====================================================================
-   12) OBERFLÄCHE
+   13) OBERFLÄCHE
    ===================================================================== */
 const HINTS = {
-  pan: 'Ziehen verschiebt die Karte, zwei Finger zoomen.',
+  pan: 'Ziehen verschiebt die Karte, zwei Finger zoomen, doppelt tippen zoomt hinein.',
   outbreak: 'Tippe auf die Karte: Dort bricht das Virus aus.',
   wall: 'Mit einem Finger eine Mauer ziehen. Zwei Finger verschieben die Karte.',
   soldier: 'Tippe, um einen Soldaten zu postieren. Reichweite 45 m.',
@@ -2408,6 +3200,8 @@ function updateHud(now){
   hudT = now;
   const c = counts();
   G.maxZ = Math.max(G.maxZ, c.z);
+  const K = c.h > 12000 ? 8 : c.h > 6000 ? 4 : c.h > 2500 ? 2 : 1;
+  if (K !== G.coldK){ G.coldK = K; G.coldAcc.fill(0); }
   $('#cH').textContent = c.h; $('#cZ').textContent = c.z; $('#cS').textContent = c.s; $('#cK').textContent = G.kills;
   const tot = c.h + c.z + c.s || 1;
   $('#barH').style.width = (c.h/tot*100) + '%';
@@ -2416,10 +3210,10 @@ function updateHud(now){
   $('#clock').textContent = fmtClock(G.time);
   // Maßstab
   const target = 90/cam.s;
-  const nice = [5,10,20,25,50,100,200,250,500,1000];
+  const nice = [5,10,20,25,50,100,200,250,500,1000,2000,2500,5000];
   let m = nice[0]; for (const n of nice) if (n <= target) m = n;
   $('#scale i').style.width = Math.round(m*cam.s) + 'px';
-  $('#scale span').textContent = m + ' m';
+  $('#scale span').textContent = m >= 1000 ? String(m/1000).replace('.', ',') + ' km' : m + ' m';
   // Spielende
   if (G.started && !G.ended && G.time > 1){
     if (c.h + c.s === 0){ G.ended = true; endScreen(false, c); }
@@ -2447,6 +3241,8 @@ function showModal(title, cls, text, stats, buttons){
   box.firstChild && box.firstChild.focus();
 }
 
+const fmtNum = n => n.toLocaleString('de-DE');
+const fmtSize = m => m >= 1000 ? `${String(m/1000).replace('.', ',')} × ${String(m/1000).replace('.', ',')} km` : `${m} × ${m} m`;
 function openMenu(){
   running = false; syncPlay();
   const c = counts();
@@ -2459,10 +3255,11 @@ function openMenu(){
     ['Erledigt', String(G.kills)],
     ['Türme', `${fl} Flamme · ${te} Tesla`],
     ['Mauern', `${Math.round(G.walls.reduce((s, w) => s + w.len, 0))} m`]
-  ].concat(lastMap.seed != null ? [['Seed', lastMap.seedLabel]] : []), [
+  ].concat(G.labels ? [['Orte', String(G.labels.length)]] : [])
+   .concat(lastMap.seed != null ? [['Größe', fmtSize(lastMap.size)], ['Seed', lastMap.seedLabel]] : []), [
     { label:'Weiter', cls:'primary', fn:() => { running = true; syncPlay(); } },
     { label:'Neu starten, gleiche Karte', fn:() => resetGame() }
-  ].concat(lastMap.seed != null ? [{ label:'Neue Zufallsstadt', fn:() => { seedIn.value = newSeed(); buildRandom(); } }] : [])
+  ].concat(lastMap.seed != null ? [{ label:'Neue Zufallskarte', fn:() => { seedIn.value = newSeed(); buildRandom(lastMap.size, lastMap.humans); } }] : [])
    .concat([{ label:'Anderen Ort wählen', cls:'ghost', fn:() => backToStart() }]));
 }
 
@@ -2476,7 +3273,7 @@ function endScreen(won, c){
     { label:'Neu starten, gleiche Karte', fn:() => resetGame() },
     { label:'Anderen Ort wählen', cls:'ghost', fn:() => backToStart() }
   ]);
-  else showModal('Die Stadt ist gefallen', 'lose', `Kein Mensch ist mehr übrig. ${G.name} gehört den Zombies.`, [
+  else showModal(G.labels ? 'Die Region ist gefallen' : 'Die Stadt ist gefallen', 'lose', `Kein Mensch ist mehr übrig. ${G.name} gehört den Zombies.`, [
     ['Dauer', dur], ['Zombies erledigt', String(G.kills)], ['Höchststand Zombies', String(G.maxZ)]
   ], [
     { label:'Neu starten, gleiche Karte', cls:'primary', fn:() => resetGame() },
@@ -2491,12 +3288,13 @@ const ATTR = {
 };
 function setAttribution(m){
   const el = $('.osm');
-  if (m.seed != null) el.textContent = 'Zufallsstadt · Seed ' + m.seedLabel;
+  if (m.seed != null) el.textContent = 'Zufallskarte · Seed ' + m.seedLabel;
   else el.innerHTML = ATTR[m.src] || ATTR.osm;
 }
 
 function backToStart(){
   running = false;
+  G = null; lastMap = null; clearTiles();   // große Karten brauchen viel Speicher: gleich freigeben
   $('#hud').hidden = true; $('#dock').hidden = true;
   $('#start').hidden = false;
   setStatus('');
@@ -2509,26 +3307,38 @@ function setStatus(msg, err){ const s = $('#status'); s.textContent = msg; s.cla
 const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 let busy = false;
 
+// Ladeanzeige: zeigt, woran gerade gebaut wird
+async function say(msg, quick){
+  $('#loadMsg').textContent = msg;
+  if (!quick) await nextFrame();
+}
+
 async function launch(getMap){
   if (busy) return;
   busy = true; $('#loadBtn').disabled = true; $('#randBtn').disabled = true;
+  running = false; syncPlay();
+  $('#modal').hidden = true; $('#loader').hidden = false;
+  $('#loadMsg').textContent = '';
+  setStatus('');
+  G = null; lastMap = null; clearTiles();   // alte Karte freigeben, bevor die neue Speicher braucht
   try {
     const m = await getMap();
-    setStatus('Berechne Laufwege …'); await nextFrame();
-    const humans = +popIn.value;
-    newGame(m.f, m.size, m.name, humans);
-    lastMap = { ...m, humans };
+    await newGame(m, m.humans, say);
+    lastMap = m;
     $('#placeName').textContent = m.name;
     setAttribution(lastMap);
     $('#start').hidden = true; $('#hud').hidden = false; $('#dock').hidden = false;
     fitCamera(); clampCam();
     setTool('outbreak');
     running = true; syncPlay();
-    setStatus('');
     try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch(e){}
   } catch(e){
-    setStatus(e.message || String(e), true);
+    console.error(e);
+    $('#hud').hidden = true; $('#dock').hidden = true; $('#start').hidden = false;
+    const msg = e instanceof RangeError ? 'Für diese Kartengröße reicht der Speicher nicht. Wähle eine kleinere Karte.' : (e.message || String(e));
+    setStatus(msg, true);
   } finally {
+    $('#loader').hidden = true;
     busy = false; $('#loadBtn').disabled = false; $('#randBtn').disabled = false;
   }
 }
@@ -2536,32 +3346,32 @@ async function launch(getMap){
 async function loadReal(lat, lon, name){
   const size = +$('#area').value;
   const key = `v2:${lat.toFixed(4)},${lon.toFixed(4)},${size}`;
-  setStatus('Prüfe Zwischenspeicher …');
+  await say('Prüfe Zwischenspeicher …');
   let f = await cacheGet(key);
   if (!f){
     try {
-      f = await fetchTilesArea(lat, lon, size, msg => setStatus(msg));
+      f = await fetchTilesArea(lat, lon, size, msg => say(msg, true));
       f.src = 'tiles';
     } catch(e){
-      setStatus('Kachelserver nicht erreichbar, versuche Overpass …'); await sleep(700);
+      await say('Kachelserver nicht erreichbar, versuche Overpass …'); await sleep(700);
       const json = await fetchArea(lat, lon, size, (part, total, srv) => {
         const piece = total > 1 ? `, Teil ${part} von ${total}` : '';
-        setStatus(srv ? `Lade Kartendaten${piece} (Ersatzserver ${srv}) …` : `Lade Kartendaten über Overpass${piece} …`);
+        say(srv ? `Lade Kartendaten${piece} (Ersatzserver ${srv}) …` : `Lade Kartendaten über Overpass${piece} …`, true);
       });
-      setStatus('Verarbeite Kartendaten …'); await nextFrame();
+      await say('Verarbeite Kartendaten …');
       f = parseOSM(json, lat, lon);
       f.src = 'osm';
     }
     if (!f.roads.length && !f.buildings.length) throw new Error('An diesem Ort gibt es keine Kartendaten. Wähle einen bewohnten Ort.');
     cachePut(key, f);
   }
-  return { f, size, name, src: f.src || 'osm' };
+  return { f, size, name, src: f.src || 'osm', humans: +popIn.value };
 }
 
 $('#loadBtn').addEventListener('click', () => launch(async () => {
   const q = $('#q').value.trim();
   if (!q) throw new Error('Gib einen Ort ein, z. B. „Obertshausen“ oder „Römerberg, Frankfurt“.');
-  setStatus('Suche Ort …');
+  await say('Suche Ort …');
   const g = await geocode(q);
   return loadReal(g.lat, g.lon, g.name);
 }));
@@ -2579,49 +3389,91 @@ $('#geoBtn').addEventListener('click', () => {
   }, { enableHighAccuracy:true, timeout:12000, maximumAge:60000 });
 });
 
-const seedIn = $('#seed');
+// ---------- Zufallskarten ----------
+const seedIn = $('#seed'), rsize = $('#rsize'), rpop = $('#rpop'), rpopOut = $('#rpopOut');
 const newSeed = () => String(1 + Math.floor(Math.random()*999999));
 seedIn.value = newSeed();
 $('#diceBtn').addEventListener('click', () => { seedIn.value = newSeed(); });
-function buildRandom(){
+
+// Menschen-Regler und Beschreibung passend zur Größe: [min, max, Schritt, Vorgabe]
+const RSIZES = {
+  1000:  { pop:[100, 2000, 50, 500],      note:'Kleinstadt: eine Stadt füllt die ganze Karte.' },
+  1500:  { pop:[100, 3000, 50, 800],      note:'Stadt: eine Stadt füllt die ganze Karte.' },
+  3000:  { pop:[500, 8000, 100, 2500],    note:'Großstadt: eine große Stadt füllt die ganze Karte.' },
+  6000:  { pop:[1000, 15000, 250, 4000],  note:'Landkreis: Großstadt, Städte und Dörfer, verbunden durch Landstraßen und Autobahn. Dazwischen Felder, Höfe, Wald, Seen und Flüsse.' },
+  10000: { pop:[2000, 20000, 500, 8000], note:'Riesig: Großstadt, ein paar Städte und gut zehn Dörfer auf 100 km². Der Aufbau dauert ein paar Sekunden.' },
+  16000: { pop:[4000, 30000, 500, 12000], note:'Gigantisch: zwei Großstädte, viele Städte und gut zwanzig Dörfer auf 256 km². Der Aufbau dauert etwas länger.' }
+};
+function syncSize(){
+  const sz = RSIZES[rsize.value] || RSIZES[1500], [mn, mx, st, def] = sz.pop;
+  rpop.min = mn; rpop.max = mx; rpop.step = st;
+  const saved = +lsGet('ausbruch-rpop-' + rsize.value);
+  rpop.value = saved >= mn && saved <= mx ? saved : def;
+  rpopOut.textContent = fmtNum(+rpop.value);
+  $('#rsizeNote').textContent = sz.note;
+}
+rsize.addEventListener('change', () => { lsSet('ausbruch-rsize', rsize.value); syncSize(); });
+rpop.addEventListener('input', () => { rpopOut.textContent = fmtNum(+rpop.value); lsSet('ausbruch-rpop-' + rsize.value, +rpop.value); });
+{ const v = lsGet('ausbruch-rsize'); if (v && RSIZES[v]) rsize.value = String(v); }
+syncSize();
+
+function buildRandom(size, humans){
   return launch(async () => {
     let label = seedIn.value.trim();
     if (!label){ label = newSeed(); seedIn.value = label; }
     const seed = /^\d+$/.test(label) ? (parseInt(label, 10) % 999999) + 1 : hashSeed(label);
-    const size = +$('#area').value;
-    setStatus('Baue Zufallsstadt …'); await nextFrame();
-    const { f, name } = randomCity(seed, size);
-    return { f, size, name, seed, seedLabel: label };
+    size = size || +rsize.value;
+    humans = humans || +rpop.value;
+    let res;
+    if (size >= REGION_MIN) res = await randomRegion(seed, size, say);
+    else { await say('Baue Zufallsstadt …'); res = randomCity(seed, size); }
+    return { f:res.f, size, name:res.name, towns:res.towns || null, seed, seedLabel:label, humans };
   });
 }
-$('#randBtn').addEventListener('click', buildRandom);
+$('#randBtn').addEventListener('click', () => buildRandom());
 seedIn.addEventListener('keydown', e => { if (e.key === 'Enter') buildRandom(); });
 
 /* =====================================================================
-   13) HAUPTSCHLEIFE
+   14) HAUPTSCHLEIFE
    ===================================================================== */
 let last = performance.now();
+const PERF = { sim:0, fields:0, render:0, frames:0 };   // Messwerte (ms, aufsummiert) für die Konsole
 function frame(now){
-  const rdt = Math.min(0.05, (now - last)/1000);
+  requestAnimationFrame(frame);           // zuerst: ein Fehler unten hält das Spiel nicht an
+  const rdt = Math.max(0, Math.min(0.05, (now - last)/1000));
   last = now;
+  stepCamAnim(now);
   if (G && running && $('#start').hidden){
     const gdt = rdt * TIME_BASE * SPEEDS[speedIdx];
     if (G.started){
       G.fieldT -= gdt;
-      if (G.fieldT <= 0){ updateFields(); G.fieldT = FIELD_INTERVAL; }
+      if (G.fieldT <= 0 && now >= G.fieldNext){
+        const t0 = performance.now();
+        updateFields();
+        const c = performance.now() - t0;
+        G.fieldT = FIELD_INTERVAL; G.fieldNext = now + c*3;   // teure Felder seltener: höchstens etwa ein Drittel der Rechenzeit
+        PERF.fields += c;
+      }
     }
+    const t1 = performance.now();
+    // ferne Menschen: jedes Bild ist eine andere Gruppe dran und holt die verstrichene Zeit nach
+    const K = G.coldK, sel = G.frameNo++ % K;
+    for (let k = 0; k < K; k++) G.coldAcc[k] += gdt;
+    const cdt = G.coldAcc[sel]; G.coldAcc[sel] = 0;
     const n = Math.max(1, Math.ceil(gdt / MAX_SUBSTEP)), sdt = gdt / n;
-    for (let k=0; k<n; k++) step(sdt);
+    for (let k=0; k<n; k++) step(sdt, k === 0 ? cdt : 0, sel);
     G.time += gdt;
+    PERF.sim += performance.now() - t1;
   }
+  const t2 = performance.now();
   render(now, rdt);
+  PERF.render += performance.now() - t2; PERF.frames++;
   if (G && $('#start').hidden) updateHud(now);
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
 // Test-Zugang für die Konsole
-window.__ausbruch = { get G(){ return G; }, cam, randomCity, decodeTile, addTile, emptyFeatures, placeOutbreak, placeSoldier, placeTower, addWall, setTool, step, updateFields, counts };
+window.__ausbruch = { get G(){ return G; }, cam, randomCity, randomRegion, decodeTile, addTile, emptyFeatures, placeOutbreak, placeSoldier, placeTower, addWall, setTool, step, updateFields, counts, tiles, zoomAt, render, PERF, launch };
 </script>
 </body>
 </html>
