@@ -26,6 +26,8 @@
   --soldier:#ffb43a;
   --flame:#ff7a2e;
   --tesla:#6fe3ff;
+  --cure:#7fb2ff;
+  --air:#ffd166;
   --wall:#d9c7a5;
   --alert:#ff5f52;
   --f-display:"Saira Stencil One","Arial Black",Impact,sans-serif;
@@ -69,6 +71,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .dot.h{background:var(--human)}
 .dot.z{background:var(--zombie);box-shadow:0 0 0 4px rgba(92,255,122,.18)}
 .dot.s{background:var(--soldier);box-shadow:0 0 0 2px #1a1206 inset}
+.dot.i{background:var(--cure);box-shadow:0 0 0 3px rgba(127,178,255,.2)}
 .mk{display:inline-block;width:12px;height:12px;flex:none}
 .mk.f{background:#23150d;border:2px solid var(--flame);border-radius:2px}
 .mk.t{background:#0c1c26;border:2px solid var(--tesla);border-radius:50%;box-shadow:0 0 6px rgba(111,227,255,.6)}
@@ -113,6 +116,7 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
 #barH{background:var(--human)}
 #barS{background:var(--soldier)}
 #barZ{background:var(--zombie)}
+#barI{background:var(--cure)}
 .counts{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px;color:var(--muted);font-weight:500}
 .counts span{display:inline-flex;align-items:center;gap:6px}
 .counts em{font-style:normal;font-family:var(--f-num);font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums}
@@ -152,6 +156,12 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
 [data-build=soldier]{--c:var(--soldier)}
 [data-build=flame]{--c:var(--flame)}
 [data-build=tesla]{--c:var(--tesla)}
+[data-tool=strike],[data-strike=bomb]{--c:var(--alert)}
+[data-strike=air]{--c:var(--air)}
+[data-strike=cure]{--c:var(--cure)}
+.chip{position:relative}
+.chip .cd{position:absolute;left:8%;bottom:4px;height:3px;border-radius:2px;background:var(--c);opacity:.9;width:0}
+.chip.cool{opacity:.6}
 .sep{width:1px;background:var(--panel-line);margin:8px 2px;flex:none}
 
 /* ---------- Dialog ---------- */
@@ -196,6 +206,7 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
     <p class="lead">Wähle einen echten Ort oder lass eine Zufallskarte bauen, von der Kleinstadt bis zur Region mit 16 × 16 km. Menschen ziehen in Gruppen durch die Straßen, bis du den ersten Zombie aussetzt. Wer berührt wird, wird selbst einer.</p>
     <dl class="legend">
       <dt><span class="dot h"></span></dt><dd><b>Mensch</b> <span class="num">· 1,4 m/s, meist in Gruppen</span></dd>
+      <dt><span class="dot i"></span></dt><dd><b>Geimpft</b> <span class="num">· heilt Zombies, gibt das Mittel weiter</span></dd>
       <dt><span class="dot z"></span></dt><dd><b>Zombie</b> <span class="num">· rennt mit 2,8 m/s, bildet Horden</span></dd>
       <dt><span class="dot s"></span></dt><dd><b>Soldat</b> <span class="num">· schießt bis 45 m</span></dd>
       <dt><span class="mk f"></span></dt><dd><b>Flammenturm</b> <span class="num">· 16 m, setzt in Brand</span></dd>
@@ -273,9 +284,10 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
     </div>
-    <div class="popbar" aria-hidden="true"><i id="barH"></i><i id="barS"></i><i id="barZ"></i></div>
+    <div class="popbar" aria-hidden="true"><i id="barH"></i><i id="barI"></i><i id="barS"></i><i id="barZ"></i></div>
     <div class="counts">
       <span><b class="dot h"></b><em id="cH">0</em> Menschen</span>
+      <span><b class="dot i"></b><em id="cI">0</em> geimpft</span>
       <span><b class="dot z"></b><em id="cZ">0</em> Zombies</span>
       <span><b class="dot s"></b><em id="cS">0</em> Soldaten</span>
       <span><em id="cK">0</em> erledigt</span>
@@ -309,18 +321,36 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
         <span>Tesla</span>
       </button>
     </div>
+    <div id="tray2" class="tray" role="toolbar" aria-label="Einsatz" hidden>
+      <button class="chip" data-strike="bomb" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.5" cy="14" r="6.5"/><path d="M15.2 9.3l2.3-2.3M18.2 3v1.6M21 6h-1.6M20.2 3.8l-1.1 1.1"/></svg>
+        <span>Bombe</span><i class="cd"></i>
+      </button>
+      <button class="chip" data-strike="air" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M21.5 12 17 10.6V9.3l-4.7 1.2L9.2 3.5H7.6l1.6 7.6-4.5.9L3 9.8H2l.7 2.2L2 14.2h1L4.7 12l4.5.9-1.6 7.6h1.6l3.1-7 4.7 1.2v-1.3z"/></svg>
+        <span>Luftschlag</span><i class="cd"></i>
+      </button>
+      <button class="chip" data-strike="cure" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3.5l5.5 5.5M17.7 6.2l-9.9 9.9-3.3.6.6-3.3 9.9-9.9M10.8 9.1l1.8 1.8M8.5 11.4l1.8 1.8M3.5 20.5l2.3-2.3"/></svg>
+        <span>Gegenmittel</span><i class="cd"></i>
+      </button>
+    </div>
     <div class="tools" role="toolbar" aria-label="Werkzeuge">
       <button class="tool" data-tool="pan" type="button" aria-label="Ansicht">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>
         <span>Ansicht</span>
       </button>
-      <button class="tool" data-tool="outbreak" type="button" aria-label="Ausbruch">
+      <button class="tool" data-tool="outbreak" type="button" aria-label="Virus aussetzen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>
-        <span>Ausbruch</span>
+        <span>Virus</span>
       </button>
       <button class="tool" data-tool="build" id="buildBtn" type="button" aria-label="Bauen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 21V8.5h2.6v2.3h2.1V8.5h2.6v2.3h2.1V8.5H18V21z"/><path d="M10.5 21v-4.2h3V21M4.5 21h15"/></svg>
         <span>Bauen</span>
+      </button>
+      <button class="tool" data-tool="strike" id="strikeBtn" type="button" aria-label="Einsatz">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 2.8l1.7 4.4 3.9-2.6-1.2 4.5 4.6.6-3.8 2.7 3.3 3.3-4.6-.1.5 4.6-3.6-2.9-1.6 4.4-1.6-4.4-3.6 2.9.5-4.6-4.6.1 3.3-3.3-3.8-2.7 4.6-.6-1.2-4.5 3.9 2.6z"/></svg>
+        <span>Einsatz</span>
       </button>
       <button class="tool" data-tool="erase" type="button" aria-label="Abriss">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5M14 11v5"/></svg>
@@ -403,13 +433,23 @@ const TESLA_RANGE = 26, TESLA_COOLDOWN = 1.8, TESLA_DMG = 120, TESLA_FALLOFF = 0
 const TESLA_CHAIN = 5, TESLA_JUMP = 10, TESLA_STUN = 0.8;
 const TOWER_R = 2.2;                // m Grundfläche (Radius)
 
-const WALL_THICK = 1.6;             // m Radius beim Mauer-Rastern
+const WALL_THICK = 2.0;             // m: halbe Mauerdicke (Mauern sind 4 m dick)
 const FIELD_INTERVAL = 0.3;         // s Spielzeit zwischen Wegfeld-Updates
 const MAX_SUBSTEP = 0.25;           // s Spielzeit pro Simulationsschritt
 const MAX_STEPS = 8, HARD_SUBSTEP = 0.35;   // mehr schafft ein Bild nicht: dann läuft das Spiel etwas langsamer statt zu ruckeln
 const TAU = Math.PI*2;
 const H = 0, Z = 1, S = 2;          // Agententypen
 const BUILD = new Set(['wall', 'soldier', 'flame', 'tesla']);
+
+// Einsatz
+const STRIKE = new Set(['bomb', 'air', 'cure']);
+const BOMB_R = 18;                  // m Sprengradius der Bombe
+const AIR_R = 13, AIR_SPACING = 18, AIR_LEN = 140;   // Luftschlag: Radius je Bombe, Abstand, Länge bei einem Tipp
+const AIR_V = 230, AIR_LEAD = 450;  // m/s Flugzeug, m Anflug vor dem ersten Ziel
+const CURE_R = 35;                  // m Gegenmittel-Wolke
+const CURE_DOSE = 3;                // so oft gibt ein frisch Geimpfter das Mittel weiter (jede Stufe eins weniger)
+const CURE_SPREAD = 0.25;           // pro Sekunde: Chance, einen Menschen nebenan zu impfen
+const COOL = { bomb:2, air:8, cure:10 };   // s Nachladen
 
 // Große Karten
 const CS = 64;                      // Zellen pro Block (128 m) für die Wegfelder
@@ -439,7 +479,8 @@ const COL = {
   bldg:'#1a2430', bldgEdge:'#32475d', barrier:'#4a5866', rail:'#3a4048',
   frame:'#3a4a58', grid:'rgba(255,255,255,0.035)',
   human:'#f4f6f8', zombie:'#5cff7a', zombieGlow:'rgba(92,255,122,0.17)',
-  soldier:'#ffb43a', soldierRing:'#1a1206', wall:'#d9c7a5', wallEdge:'#5b4f3d',
+  soldier:'#ffb43a', soldierRing:'#1a1206', wall:'#cdbd9d', wallEdge:'#3e3528', wallJoint:'rgba(70,58,42,0.6)',
+  immune:'#7fb2ff', immuneGlow:'rgba(127,178,255,0.2)', deadHuman:'rgba(175,175,175,0.4)',
   flame:'#ff7a2e', flameBase:'#23150d', tesla:'#6fe3ff', teslaBase:'#0c1c26',
   corpse:'rgba(70,150,85,0.45)', ash:'rgba(90,60,40,0.6)'
 };
@@ -2028,6 +2069,7 @@ async function newGame(m, humans, say){
     agents: [], walls: [], towers: [], corpses: [], fx: [], tracers: [], bolts: [], parts: [],
     time: 0, fieldT: 0, started: false, ended: false, kills: 0, maxZ: 0, humans0: 0, _lastKills: -1,
     ph: newHash(), zh: newHash(),
+    strikes: [], blasts: [], cureFx: [], smoke: [], scorch: [], shake: 0, cool: { bomb:0, air:0, cure:0 }, dead: 0, cured: 0, dirty: false,
     SW, sEdge, scent: new Uint16Array(SW*SW), scentNext: new Uint16Array(SW*SW), sq: new Int32Array(1 << 14), sbfs: null, scentT: 0,
     HW, hz: new Uint16Array(HW*HW), hsx: new Float32Array(HW*HW), hsy: new Float32Array(HW*HW), hcx: new Float32Array(HW*HW), hcy: new Float32Array(HW*HW), hList: [], hordeT: 0
   };
@@ -2066,6 +2108,9 @@ function resetGame(){
   for (const n of G.hList){ G.hz[n] = 0; G.hsx[n] = G.hsy[n] = G.hcx[n] = G.hcy[n] = 0; }
   G.hList = [];
   G.time = 0; G.fieldT = 0; G.started = false; G.ended = false; G.kills = 0; G.maxZ = 0; G._lastKills = -1;
+  G.strikes = []; G.blasts = []; G.cureFx = []; G.smoke = []; G.scorch = []; G.shake = 0;
+  G.cool = { bomb:0, air:0, cure:0 }; G.dead = 0; G.cured = 0; G.dirty = false;
+  syncCooldowns();
   spawnHumans(lastMap.humans);
   setTool('outbreak');
   running = true; syncPlay();
@@ -2224,6 +2269,7 @@ function fleeStep(a, i, dt, speed){
 }
 
 function updHuman(a, dt){
+  if (a.dose > 0) spreadCure(a, dt);
   const i = cellIndex(a.x, a.y);
   const dz = (i >= 0 && G.started) ? dv(G.distZ, i) : FAR;
   const g = a.g;
@@ -2366,7 +2412,7 @@ function bfs(dist, type, cutoff, list, inR){
   let q = g.q, mask = q.length - 1, qh = 0, qt = 0;
   for (const a of g.agents){
     if (!a.alive) continue;
-    if (type === Z ? a.t !== Z : a.t === Z) continue;
+    if (type === Z ? a.t !== Z : !isPrey(a)) continue;
     const i = cellIndex(a.x, a.y);
     if (i < 0 || (cell[i] & C_BLK) || dist[i] === 1) continue;
     const c = (((i / W) | 0) >> 6)*CW + ((i % W) >> 6);
@@ -2406,7 +2452,7 @@ function updateFields(){
     if (!a.alive) continue;
     const c = chunkAt(a.x, a.y);
     if (c < 0) continue;
-    if (a.t === Z) g.zc[c] = 1; else g.hc[c] = 1;
+    if (a.t === Z) g.zc[c] = 1; else if (isPrey(a)) g.hc[c] = 1;
   }
   // zN: höchstens einen Block (128 m) bis zum nächsten Zombie. Dort laufen Menschen in voller Genauigkeit.
   dilate(g.zc, g.zN, 1);
@@ -2469,7 +2515,7 @@ function scentStart(){
   S.fill(0);
   let q = g.sq, mask = q.length - 1, qt = 0;
   for (const a of g.agents){
-    if (!a.alive || a.t === Z) continue;
+    if (!a.alive || !isPrey(a)) continue;
     const ix = Math.floor((a.x + g.half)/CELL), iy = Math.floor((a.y + g.half)/CELL);
     if (ix < 0 || iy < 0 || ix >= g.W || iy >= g.W) continue;
     const n = ((iy/SG)|0)*SW + ((ix/SG)|0);
@@ -2680,7 +2726,7 @@ function hurt(z, dmg, kind){
   z.hp -= dmg;
   if (z.hp <= 0){
     z.alive = false; G.kills++;
-    G.corpses.push({ x:z.x, y:z.y, ash: kind === 'flame' });
+    G.corpses.push({ x:z.x, y:z.y, ash: kind === 'flame' || kind === 'blast' });
     if (G.corpses.length > 800) G.corpses.shift();
   }
 }
@@ -2695,7 +2741,7 @@ function updZombie(a, dt){
   a.run = true;
   // ganz nah: direkt auf den Menschen zu
   if (d <= 3){
-    const p = nearestIn(G.ph, a.x, a.y, 9, null);
+    const p = nearestIn(G.ph, a.x, a.y, 9, isPrey);
     if (p){ steerTo(a, p.x, p.y, sp, dt); return; }
   }
   // ab und zu stolpert einer kurz
@@ -2841,9 +2887,15 @@ function bites(){
   for (const z of G.agents){
     if (!z.alive || z.t !== Z || z.stun > 0) continue;
     forEachIn(G.ph, z.x, z.y, BITE_DIST, p => {
-      if (!p.alive || p.t === Z) return;
+      if (!p.alive || p.t === Z || z.t !== Z) return;
       const dx = p.x - z.x, dy = p.y - z.y;
       if (dx*dx + dy*dy < b2){
+        // Geimpfte: Der Biss heilt den Zombie (solange ihre Dosis reicht), sonst prallt er ab
+        if (p.imm){
+          if (p.dose > 0){ p.dose--; cureZombie(z, p.dose); }
+          else z.stun = Math.max(z.stun || 0, 0.8);
+          return;
+        }
         if (p.t === H) removeFromGroup(p);
         zombify(p);
         G.fx.push({ x:p.x, y:p.y, t:now });
@@ -2878,9 +2930,9 @@ function step(dt, coldDt, coldSel){
   }
   for (const t of g.towers){ if (t.type === 'flame') updFlame(t, dt); else updTesla(t, dt); }
   bites();
-  if (g.kills !== g._lastKills){
+  if (g.kills !== g._lastKills || g.dirty){
     g.agents = g.agents.filter(a => a.alive);
-    g._lastKills = g.kills;
+    g._lastKills = g.kills; g.dirty = false;
   }
 }
 
@@ -2984,6 +3036,287 @@ function segDist(px, py, a, b){
   const vx = b[0]-a[0], vy = b[1]-a[1], l2 = vx*vx + vy*vy || 1;
   const t = Math.max(0, Math.min(1, ((px-a[0])*vx + (py-a[1])*vy)/l2));
   return Math.hypot(px - (a[0]+vx*t), py - (a[1]+vy*t));
+}
+
+/* =====================================================================
+   10b) EINSATZ: Bombe, Luftschlag, Gegenmittel
+   Laufen in echter Zeit (damit man sie auch bei ×10 sieht) und halten an,
+   wenn das Spiel pausiert. Jede Waffe lädt nach dem Einsatz kurz nach.
+   Gegenmittel: heilt Zombies und impft Menschen. Geimpfte tragen eine Dosis
+   weiter: Ein Zombie, der sie berührt, wird geheilt, und sie impfen Menschen
+   in ihrer Nähe. Jede Weitergabe schwächt die Dosis um eins, bis die Kette endet.
+   ===================================================================== */
+const STRIKE_NAME = { bomb:'Bombe', air:'Luftschlag', cure:'Gegenmittel' };
+
+function strikeReady(kind){
+  const c = G.cool[kind];
+  if (c > 0){ flashHint(`${STRIKE_NAME[kind]} lädt noch, ${Math.ceil(c)} s.`); return false; }
+  G.cool[kind] = COOL[kind];
+  syncCooldowns();
+  return true;
+}
+
+function dropBomb(x, y){
+  if (!strikeReady('bomb')) return;
+  G.strikes.push({ kind:'bomb', x, y, t:0, at:0.45, end:0.5 });
+}
+
+function dropCure(x, y){
+  if (!strikeReady('cure')) return;
+  G.strikes.push({ kind:'cure', x, y, t:0, at:0.35, end:0.4 });
+}
+
+// Anflug entlang einer gezogenen Linie; ein Tipp ergibt eine Linie in zufälliger Richtung
+function callAirstrike(x0, y0, x1, y1){
+  let dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy);
+  const cx = (x0 + x1)/2, cy = (y0 + y1)/2;
+  if (L < 25){ const a = rand()*TAU; dx = Math.cos(a); dy = Math.sin(a); L = AIR_LEN; }
+  else { dx /= L; dy /= L; L = Math.min(L, 320); }
+  if (!strikeReady('air')) return;
+  const n = Math.max(3, Math.min(14, Math.round(L/AIR_SPACING) + 1));
+  const sx = cx - dx*L/2, sy = cy - dy*L/2, bombs = [];
+  for (let k = 0; k < n; k++){
+    const u = n > 1 ? L*k/(n - 1) : L/2;
+    // Abwurf, wenn das Flugzeug über der Stelle ist, Einschlag nach kurzer Fallzeit
+    bombs.push({ x: sx + dx*u + (rand() - 0.5)*4, y: sy + dy*u + (rand() - 0.5)*4, at:(AIR_LEAD + u)/AIR_V + 0.55, done:false });
+  }
+  G.strikes.push({ kind:'air', sx, sy, ux:dx, uy:dy, L, bombs, t:0, end:(2*AIR_LEAD + L)/AIR_V + 0.8 });
+}
+
+function updStrikes(rdt){
+  for (const k in G.cool) if (G.cool[k] > 0) G.cool[k] = Math.max(0, G.cool[k] - rdt);
+  if (!G.strikes.length) return;
+  for (const s of G.strikes){
+    s.t += rdt;
+    if (s.kind === 'air'){ for (const b of s.bombs) if (!b.done && s.t >= b.at){ b.done = true; explode(b.x, b.y, AIR_R, 0.7); } }
+    else if (!s.done && s.t >= s.at){
+      s.done = true;
+      if (s.kind === 'bomb') explode(s.x, s.y, BOMB_R, 1); else applyCure(s.x, s.y);
+    }
+  }
+  G.strikes = G.strikes.filter(s => s.t < s.end);
+}
+
+// Menschen und Soldaten, die eine Explosion nicht überleben
+function killPerson(a){
+  if (!a.alive) return;
+  a.alive = false;
+  if (a.t === H) removeFromGroup(a);
+  G.dead++; G.dirty = true;
+  G.corpses.push({ x:a.x, y:a.y, human:true });
+  if (G.corpses.length > 800) G.corpses.shift();
+}
+
+function explode(x, y, R, power){
+  const now = performance.now(), R2 = R*R;
+  for (const a of G.agents){
+    if (!a.alive) continue;
+    const dx = a.x - x, dy = a.y - y, d2 = dx*dx + dy*dy;
+    if (d2 > R2*2.25) continue;
+    const d = Math.sqrt(d2);
+    if (a.t === Z){
+      if (d > R) continue;
+      hurt(a, d < R*0.6 ? 1000 : 180*(1 - (d - R*0.6)/(R*0.4)), 'blast');
+      if (a.alive){ a.stun = Math.max(a.stun || 0, 1.2); const k = 3*(R - d)/R/(d || 1); moveBy(a, dx*k, dy*k); }
+    } else if (d < R*0.55) killPerson(a);
+    else if (a.t === H && a.g) a.g.panic = PANIC_TIME*2;     // wer es überlebt, rennt los
+  }
+  G.blasts.push({ x, y, R, t:now });
+  G.scorch.push({ x, y, r:R*0.8 });
+  if (G.scorch.length > 150) G.scorch.shift();
+  for (let k = 0; k < 30; k++){
+    const a = rand()*TAU, sp = R*(1.5 + rand()*3);
+    emit({ k:0, x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, age:0, life:0.3 + rand()*0.35, s0:R*0.08, s1:R*(0.18 + rand()*0.12), drag:3 });
+  }
+  for (let k = 0; k < 16; k++){
+    if (G.smoke.length > 500) G.smoke.shift();
+    const a = rand()*TAU, sp = R*(0.2 + rand()*0.5);
+    G.smoke.push({ x: x + Math.cos(a)*R*0.3, y: y + Math.sin(a)*R*0.3, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - 1.5, age:0, life:2.5 + rand()*2, s0:R*0.25, s1:R*(0.6 + rand()*0.4) });
+  }
+  // Erschütterung, wenn die Explosion im Bild ist
+  const sx = cam.x + x*cam.s, sy = cam.y + y*cam.s;
+  if (sx > -100 && sx < VW + 100 && sy > -100 && sy < VH + 100) G.shake = Math.min(14, G.shake + 5*power*Math.min(1.5, Math.max(0.4, cam.s)));
+}
+
+function vaccinate(a, dose){ a.imm = 1; a.dose = Math.max(a.dose || 0, dose); }
+
+// Zombie wird wieder Mensch: geimpft und mit einer (schwächeren) Dosis zum Weitergeben
+function cureZombie(z, dose){
+  Object.assign(z, { t:H, h:rand()*TAU, turn:rand()*3, idle:0, g:null, rank:0, tc:0, joinT:rand()*2, stuck:0, px:z.x, py:z.y, run:false, burn:0, stun:0 });
+  if (z.cg == null) z.cg = (rand()*8)|0;
+  makeGroup(z);
+  vaccinate(z, dose);
+  G.cured++;
+  G.fx.push({ x:z.x, y:z.y, t:performance.now(), cure:true });
+}
+
+function applyCure(x, y){
+  const R2 = CURE_R*CURE_R;
+  for (const a of G.agents){
+    if (!a.alive || (a.x - x)**2 + (a.y - y)**2 > R2) continue;
+    if (a.t === Z) cureZombie(a, CURE_DOSE);
+    else if (a.t === H) vaccinate(a, CURE_DOSE);
+  }
+  G.cureFx.push({ x, y, t:performance.now() });
+  for (let k = 0; k < 40; k++){
+    const a = rand()*TAU, d = Math.sqrt(rand())*CURE_R;
+    emit({ k:4, x: x + Math.cos(a)*d, y: y + Math.sin(a)*d, vx:(rand() - 0.5)*3, vy:-1 - rand()*3, age:0, life:0.6 + rand()*0.8, s0:0.5, s1:0.15, drag:1 });
+  }
+}
+
+// Geimpfte mit Dosis impfen ab und zu einen Menschen neben sich
+function spreadCure(a, dt){
+  if (!(a.dose > 0) || rand() > CURE_SPREAD*dt) return;
+  const q = nearestIn(G.ph, a.x, a.y, 1.8, p => p.t === H && !p.imm);
+  if (!q) return;
+  a.dose--;
+  vaccinate(q, a.dose);
+  G.fx.push({ x:q.x, y:q.y, t:performance.now(), cure:true });
+}
+
+// Wer lockt Zombies an? Alle außer Geimpften ohne Dosis (die riecht kein Zombie mehr)
+const isPrey = a => a.t !== Z && !(a.imm && !(a.dose > 0));
+
+// Nachladen auf den Knöpfen anzeigen
+function syncCooldowns(){
+  document.querySelectorAll('.chip[data-strike]').forEach(b => {
+    const k = b.dataset.strike, f = G ? G.cool[k]/COOL[k] : 0;
+    b.classList.toggle('cool', f > 0);
+    b.querySelector('.cd').style.width = (f*84).toFixed(1) + '%';
+  });
+}
+
+// Mauern sehen wie Mauern aus: Schatten, Kante, Steinfugen (nah dran), Licht auf der Krone
+function drawWalls(s){
+  const list = G.walls, draft = wallDraft && tool === 'wall' && wallDraft.length > 1 ? wallDraft : null;
+  if (!list.length && !draft) return;
+  const ww = Math.max(WALL_THICK*2, 5/s), hw = ww/2;
+  const path = arr => { ctx.beginPath(); arr.forEach(w => traceLine(ctx, w.pts || w)); };
+  ctx.lineCap = 'butt'; ctx.lineJoin = 'miter'; ctx.miterLimit = 3;
+  if (list.length){
+    const off = Math.max(0.5, 2.4/s);
+    ctx.save(); ctx.translate(off*0.6, off);
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = ww + 1/s; path(list); ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = COL.wallEdge; ctx.lineWidth = ww + Math.max(0.5, 2/s); path(list); ctx.stroke();
+    ctx.strokeStyle = COL.wall; ctx.lineWidth = ww; path(list); ctx.stroke();
+    if (s > 1.2){
+      // Steine im Verband: Längsfuge in der Mitte, Querfugen alle 2 m, die zweite Reihe versetzt
+      ctx.strokeStyle = COL.wallJoint; ctx.lineWidth = Math.max(0.1, 0.9/s); ctx.beginPath();
+      for (const w of list){
+        traceLine(ctx, w.pts);
+        let acc = 0;
+        for (let k = 1; k < w.pts.length; k++){
+          const [ax, ay] = w.pts[k-1], [bx, by] = w.pts[k], L = Math.hypot(bx - ax, by - ay);
+          if (!L) continue;
+          const tx = (bx - ax)/L, ty = (by - ay)/L, nx = -ty, ny = tx;
+          for (let u = (1 - acc % 1)%1; u < L; u += 1){
+            const m = Math.round(acc + u), px = ax + tx*u, py = ay + ty*u, side = m % 2 ? 1 : -1;
+            ctx.moveTo(px, py); ctx.lineTo(px + nx*hw*side, py + ny*hw*side);
+          }
+          acc += L;
+        }
+      }
+      ctx.stroke();
+    }
+    // Licht auf der Mauerkrone
+    ctx.save(); ctx.translate(-hw*0.25, -hw*0.35);
+    ctx.strokeStyle = 'rgba(255,248,230,0.22)'; ctx.lineWidth = ww*0.22; path(list); ctx.stroke();
+    ctx.restore();
+  }
+  if (draft){
+    ctx.setLineDash([2.5, 1.5]); ctx.globalAlpha = 0.7;
+    ctx.strokeStyle = COL.wall; ctx.lineWidth = ww; ctx.beginPath(); traceLine(ctx, draft); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+  }
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+}
+
+// Zielmarkierungen, Flugzeug, Rauch und Druckwellen
+function drawStrikes(now, s, phase){
+  if (phase === 'ground'){
+    // Brandflecken
+    if (G.scorch.length){
+      ctx.fillStyle = 'rgba(8,6,4,0.42)'; ctx.beginPath();
+      for (const c of G.scorch){ ctx.moveTo(c.x + c.r, c.y); ctx.arc(c.x, c.y, c.r, 0, TAU); }
+      ctx.fill();
+    }
+    return;
+  }
+  if (phase === 'smoke'){
+    if (!G.smoke.length) return;
+    const bins = [[], [], [], []];
+    for (const p of G.smoke) bins[Math.min(3, (p.age/p.life*4)|0)].push(p);
+    for (let b = 0; b < 4; b++){
+      if (!bins[b].length) continue;
+      ctx.fillStyle = `rgba(40,42,45,${(0.32*(1 - b/4)).toFixed(3)})`; ctx.beginPath();
+      for (const p of bins[b]){ const r = p.s0 + (p.s1 - p.s0)*p.age/p.life; ctx.moveTo(p.x + r, p.y); ctx.arc(p.x, p.y, r, 0, TAU); }
+      ctx.fill();
+    }
+    return;
+  }
+  if (phase === 'glow'){
+    // Explosionen: Lichtblitz und Druckwelle (additiv)
+    G.blasts = G.blasts.filter(b => now - b.t < 900);
+    for (const b of G.blasts){
+      const p = Math.max(0, (now - b.t)/900);
+      if (p < 0.5) glow(b.x, b.y, b.R*(1.1 + p), `rgba(255,236,190,${(0.9*(1 - p*2)).toFixed(3)})`, `rgba(255,130,40,${(0.45*(1 - p*2)).toFixed(3)})`);
+      ctx.strokeStyle = `rgba(255,214,160,${(0.7*(1 - p)).toFixed(3)})`; ctx.lineWidth = Math.max(1.5/s, b.R*0.08*(1 - p));
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.R*(0.3 + 1.4*p), 0, TAU); ctx.stroke();
+    }
+    G.cureFx = G.cureFx.filter(c => now - c.t < 1500);
+    for (const c of G.cureFx){
+      const p = Math.max(0, (now - c.t)/1500), e = 1 - (1 - p)**3;
+      glow(c.x, c.y, CURE_R*(0.5 + 0.7*e), `rgba(150,200,255,${(0.35*(1 - p)).toFixed(3)})`, `rgba(90,150,255,${(0.18*(1 - p)).toFixed(3)})`);
+      ctx.strokeStyle = `rgba(160,205,255,${(0.8*(1 - p)).toFixed(3)})`; ctx.lineWidth = Math.max(1.2/s, 0.4);
+      ctx.beginPath(); ctx.arc(c.x, c.y, CURE_R*(0.3 + 0.8*e), 0, TAU); ctx.stroke();
+    }
+    return;
+  }
+  // phase 'top': Zielkreuze, fallende Bomben, Flugzeug (immer gleich groß auf dem Bildschirm)
+  const px = 1/s;
+  for (const st of G.strikes){
+    if (st.kind === 'bomb' || st.kind === 'cure'){
+      if (st.done) continue;
+      const p = st.t/st.at, R = st.kind === 'bomb' ? BOMB_R : CURE_R;
+      ctx.strokeStyle = st.kind === 'bomb' ? 'rgba(255,95,82,0.9)' : 'rgba(127,178,255,0.9)'; ctx.lineWidth = 1.5*px;
+      ctx.beginPath(); ctx.arc(st.x, st.y, Math.max(R*(1 - 0.6*p), 8*px), 0, TAU); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(st.x - 6*px, st.y); ctx.lineTo(st.x + 6*px, st.y); ctx.moveTo(st.x, st.y - 6*px); ctx.lineTo(st.x, st.y + 6*px); ctx.stroke();
+      continue;
+    }
+    // Luftschlag: Ziele, dann das Flugzeug mit Kondensstreifen und Schatten
+    ctx.strokeStyle = 'rgba(255,95,82,0.85)'; ctx.lineWidth = 1.5*px; ctx.beginPath();
+    for (const b of st.bombs){ if (b.done) continue; ctx.moveTo(b.x - 4*px, b.y - 4*px); ctx.lineTo(b.x + 4*px, b.y + 4*px); ctx.moveTo(b.x + 4*px, b.y - 4*px); ctx.lineTo(b.x - 4*px, b.y + 4*px); }
+    ctx.stroke();
+    const u = st.t*AIR_V - AIR_LEAD, x = st.sx + st.ux*u, y = st.sy + st.uy*u;
+    const trail = Math.min(st.t*AIR_V, 90*px + 140);
+    const g = ctx.createLinearGradient(x, y, x - st.ux*trail, y - st.uy*trail);
+    g.addColorStop(0, 'rgba(230,236,240,0.5)'); g.addColorStop(1, 'rgba(230,236,240,0)');
+    ctx.strokeStyle = g; ctx.lineWidth = 3*px; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - st.ux*trail, y - st.uy*trail); ctx.stroke();
+    drawPlane(x + 14*px, y + 20*px, st.ux, st.uy, 15*px, 'rgba(0,0,0,0.35)');
+    drawPlane(x, y, st.ux, st.uy, 15*px, '#dfe5ea');
+  }
+}
+function drawPlane(x, y, ux, uy, L, col){
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(Math.atan2(uy, ux)); ctx.scale(L/10, L/10);
+  ctx.fillStyle = col; ctx.beginPath();
+  ctx.moveTo(10, 0); ctx.lineTo(6, 1.3); ctx.lineTo(1, 1.4); ctx.lineTo(-3, 8.5); ctx.lineTo(-5, 8.5); ctx.lineTo(-3, 1.4);
+  ctx.lineTo(-7.5, 1.2); ctx.lineTo(-9.5, 4); ctx.lineTo(-10.5, 4); ctx.lineTo(-9.5, 0);
+  ctx.lineTo(-10.5, -4); ctx.lineTo(-9.5, -4); ctx.lineTo(-7.5, -1.2); ctx.lineTo(-3, -1.4); ctx.lineTo(-5, -8.5); ctx.lineTo(-3, -8.5);
+  ctx.lineTo(1, -1.4); ctx.lineTo(6, -1.3); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function updSmoke(rdt){
+  const sm = G.smoke; let w = 0;
+  for (let i = 0; i < sm.length; i++){
+    const p = sm[i];
+    p.age += rdt; if (p.age >= p.life) continue;
+    const f = Math.exp(-1.2*rdt); p.vx *= f; p.vy *= f;
+    p.x += p.vx*rdt; p.y += p.vy*rdt;
+    sm[w++] = p;
+  }
+  sm.length = w;
 }
 
 /* =====================================================================
@@ -3103,11 +3436,15 @@ function render(now, rdt){
   ctx.fillStyle = COL.void; ctx.fillRect(0, 0, VW, VH);
   if (!G) return;
   const s = cam.s;
-  ctx.setTransform(dpr*s, 0, 0, dpr*s, dpr*cam.x, dpr*cam.y);
+  // Erschütterung nach Explosionen
+  const sh = G.shake > 0.3 ? G.shake : 0;
+  G.shake *= Math.exp(-rdt*7);
+  ctx.setTransform(dpr*s, 0, 0, dpr*s, dpr*(cam.x + (rand() - 0.5)*sh), dpr*(cam.y + (rand() - 0.5)*sh));
   ctx.imageSmoothingEnabled = true;
   drawBase();
   ctx.strokeStyle = COL.frame; ctx.lineWidth = 1.5/s;
   ctx.strokeRect(-G.half, -G.half, G.size, G.size);
+  drawStrikes(now, s, 'ground');
 
   if (running && rdt > 0){ emitFx(rdt, now); updParts(rdt); }
 
@@ -3120,24 +3457,20 @@ function render(now, rdt){
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
   // Mauern
-  if (G.walls.length || wallDraft){
-    const ww = Math.max(WALL_THICK*2, 3.5/s);
-    ctx.strokeStyle = COL.wallEdge; ctx.lineWidth = ww + 1.6/s;
-    ctx.beginPath(); G.walls.forEach(w => traceLine(ctx, w.pts)); ctx.stroke();
-    ctx.strokeStyle = COL.wall; ctx.lineWidth = ww;
-    ctx.beginPath(); G.walls.forEach(w => traceLine(ctx, w.pts)); ctx.stroke();
-    if (wallDraft && wallDraft.length > 1){
-      ctx.setLineDash([3, 2]); ctx.globalAlpha = 0.75;
-      ctx.beginPath(); traceLine(ctx, wallDraft); ctx.stroke();
-      ctx.setLineDash([]); ctx.globalAlpha = 1;
-    }
+  drawWalls(s);
+  // Luftschlag-Linie beim Ziehen
+  if (wallDraft && tool === 'air' && wallDraft.length > 1){
+    const a = wallDraft[0], b = wallDraft[wallDraft.length - 1];
+    ctx.strokeStyle = 'rgba(255,95,82,0.85)'; ctx.lineWidth = 2/s; ctx.setLineDash([6/s, 4/s]);
+    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); ctx.setLineDash([]);
   }
 
   // Erledigte Zombies
   if (G.corpses.length){
     const cr = r*0.8;
-    ctx.fillStyle = COL.corpse; dots(G.corpses.filter(c => !c.ash), cr, 300); ctx.fill();
+    ctx.fillStyle = COL.corpse; dots(G.corpses.filter(c => !c.ash && !c.human), cr, 300); ctx.fill();
     ctx.fillStyle = COL.ash; dots(G.corpses.filter(c => c.ash), cr, 300); ctx.fill();
+    ctx.fillStyle = COL.deadHuman; dots(G.corpses.filter(c => c.human), cr, 300); ctx.fill();
   }
 
   const hs = [], zs = [], ss = [];
@@ -3209,8 +3542,12 @@ function render(now, rdt){
     for (const z of zs){ if (!z.run || z.stun > 0) continue; ctx.moveTo(z.x, z.y); ctx.lineTo(z.x - Math.cos(z.h)*L, z.y - Math.sin(z.h)*L); }
     ctx.stroke();
   }
-  // Menschen, Zombies
-  ctx.fillStyle = COL.human; dots(hs, rd); ctx.fill();
+  // Menschen (Geimpfte blau, mit Dosis leuchtend), Zombies
+  const hn = [], hi = [], hc = [];
+  for (const a of hs){ if (a.imm){ hi.push(a); if (a.dose > 0) hc.push(a); } else hn.push(a); }
+  if (hc.length){ ctx.fillStyle = COL.immuneGlow; dots(hc, rd*2.4, 5000); ctx.fill(); }
+  ctx.fillStyle = COL.human; dots(hn, rd); ctx.fill();
+  if (hi.length){ ctx.fillStyle = COL.immune; dots(hi, rd); ctx.fill(); }
   ctx.fillStyle = COL.zombie; dots(zs, rd); ctx.fill();
   const stunned = zs.filter(z => z.stun > 0);
   if (stunned.length){ ctx.strokeStyle = 'rgba(160,236,255,0.9)'; ctx.lineWidth = Math.max(0.3, 1.2/s); circles(stunned, rd*1.5); ctx.stroke(); }
@@ -3224,8 +3561,12 @@ function render(now, rdt){
     ctx.stroke();
   }
 
+  // Rauch von Explosionen
+  drawStrikes(now, s, 'smoke');
+
   // Leuchtende Effekte: Flammen, Blitze, Schüsse (additiv gemischt, damit sie glühen)
   ctx.globalCompositeOperation = 'lighter';
+  drawStrikes(now, s, 'glow');
   for (const t of towers){
     if (t.type !== 'flame' || !t.firing) continue;
     // Kegel als weicher Grundschein
@@ -3292,11 +3633,12 @@ function render(now, rdt){
     for (const e of G.fx){
       const life = e.big ? 1600 : 700, p = Math.max(0, (now - e.t)/life);
       const rr = e.big ? r*3 + p*40 : r + p*r*6;
-      ctx.strokeStyle = `rgba(92,255,122,${(1-p).toFixed(2)})`;
+      ctx.strokeStyle = e.cure ? `rgba(140,190,255,${(1-p).toFixed(2)})` : `rgba(92,255,122,${(1-p).toFixed(2)})`;
       ctx.lineWidth = (e.big ? 2.5 : 1.4)/s;
       ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, TAU); ctx.stroke();
     }
   }
+  drawStrikes(now, s, 'top');
   drawLabels();
 }
 
@@ -3347,7 +3689,7 @@ cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
   if (pointers.size === 1){
-    gesture = { mode: tool === 'wall' ? 'draw' : 'pan', sx:e.clientX, sy:e.clientY, lx:e.clientX, ly:e.clientY, moved:false };
+    gesture = { mode: (tool === 'wall' || tool === 'air') ? 'draw' : 'pan', sx:e.clientX, sy:e.clientY, lx:e.clientX, ly:e.clientY, moved:false };
     if (gesture.mode === 'draw') wallDraft = [toWorld(e.clientX, e.clientY)];
   } else if (pointers.size === 2){
     wallDraft = null;
@@ -3386,7 +3728,8 @@ function endPointer(e){
     if (wallDraft){
       const p = toWorld(e.clientX, e.clientY), l = wallDraft[wallDraft.length-1];
       if (Math.hypot(p[0]-l[0], p[1]-l[1]) > 0.5) wallDraft.push(p);
-      addWall(simplify(wallDraft));
+      if (tool === 'air'){ const a = wallDraft[0], b = wallDraft[wallDraft.length - 1]; callAirstrike(a[0], a[1], b[0], b[1]); }
+      else addWall(simplify(wallDraft));
     }
     wallDraft = null; gesture = null;
   } else if (gesture.mode === 'pinch'){
@@ -3422,6 +3765,8 @@ function tapAt(sx, sy){
   else if (tool === 'soldier') placeSoldier(wx, wy);
   else if (tool === 'flame' || tool === 'tesla') placeTower(tool, wx, wy);
   else if (tool === 'erase') eraseAt(wx, wy);
+  else if (tool === 'bomb') dropBomb(wx, wy);
+  else if (tool === 'cure') dropCure(wx, wy);
 }
 
 // Linie glätten: Punkte näher als 2 m zusammenfassen
@@ -3444,21 +3789,31 @@ const HINTS = {
   soldier: 'Tippe, um einen Soldaten zu postieren. Reichweite 45 m.',
   flame: 'Tippe, um einen Flammenturm zu bauen. 16 m Kegel, schießt über Mauern.',
   tesla: 'Tippe, um einen Teslaturm zu bauen. Blitz springt auf bis zu 5 Zombies.',
-  erase: 'Tippe auf eine Mauer, einen Soldaten oder Turm, um ihn zu entfernen.'
+  erase: 'Tippe auf eine Mauer, einen Soldaten oder Turm, um ihn zu entfernen.',
+  bomb: 'Tippe: Bombe mit 18 m Sprengradius. Sie trifft auch Menschen.',
+  air: 'Zieh die Anflugslinie oder tippe: Bombenteppich auf 140 m.',
+  cure: 'Tippe: Gegenmittel heilt Zombies und impft Menschen (35 m). Geimpfte geben es weiter.'
 };
+const STRIKE_COLOR = { bomb:'var(--alert)', air:'var(--air)', cure:'var(--cure)' };
+let lastStrike = 'bomb';
 const BUILD_COLOR = { wall:'var(--wall)', soldier:'var(--soldier)', flame:'var(--flame)', tesla:'var(--tesla)' };
 let hintTimer = 0;
 function setTool(t){
   if (t === 'build') t = lastBuild;
+  if (t === 'strike') t = lastStrike;
   tool = t;
   if (BUILD.has(t)) lastBuild = t;
+  if (STRIKE.has(t)) lastStrike = t;
   document.querySelectorAll('.tool[data-tool]').forEach(b => {
-    const on = b.dataset.tool === 'build' ? BUILD.has(t) : b.dataset.tool === t;
+    const d = b.dataset.tool, on = d === 'build' ? BUILD.has(t) : d === 'strike' ? STRIKE.has(t) : d === t;
     b.classList.toggle('on', on);
   });
   $('#buildBtn').style.setProperty('--c', BUILD_COLOR[lastBuild]);
+  $('#strikeBtn').style.setProperty('--c', STRIKE_COLOR[lastStrike]);
   document.querySelectorAll('.chip[data-build]').forEach(b => b.classList.toggle('on', b.dataset.build === t));
+  document.querySelectorAll('.chip[data-strike]').forEach(b => b.classList.toggle('on', b.dataset.strike === t));
   $('#tray').hidden = !BUILD.has(t);
+  $('#tray2').hidden = !STRIKE.has(t);
   $('#hint').textContent = HINTS[t];
   clearTimeout(hintTimer);
 }
@@ -3469,6 +3824,7 @@ function flashHint(msg){
 }
 document.querySelectorAll('.tool[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
 document.querySelectorAll('.chip[data-build]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.build)));
+document.querySelectorAll('.chip[data-strike]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.strike)));
 
 function syncPlay(){
   const b = $('#playBtn');
@@ -3488,7 +3844,7 @@ $('#menuBtn').addEventListener('click', openMenu);
 document.addEventListener('keydown', e => {
   if (!G || $('#hud').hidden || e.target.tagName === 'INPUT') return;
   if (e.key === ' '){ e.preventDefault(); running = !running; syncPlay(); }
-  const map = { '1':'pan', '2':'outbreak', '3':'wall', '4':'soldier', '5':'flame', '6':'tesla', '7':'erase' };
+  const map = { '1':'pan', '2':'outbreak', '3':'wall', '4':'soldier', '5':'flame', '6':'tesla', '7':'erase', '8':'bomb', '9':'air', '0':'cure' };
   if (map[e.key]) setTool(map[e.key]);
   if (e.key === 'Escape'){ wallDraft = null; gesture = null; }
 });
@@ -3504,13 +3860,13 @@ function fmtDur(sec){
 }
 
 function counts(){
-  let h = 0, z = 0, s = 0;
+  let h = 0, z = 0, s = 0, i = 0;
   const groups = new Set();
   for (const a of G.agents){
     if (!a.alive) continue;
-    if (a.t === H){ h++; groups.add(a.g); } else if (a.t === Z) z++; else s++;
+    if (a.t === H){ h++; if (a.imm) i++; groups.add(a.g); } else if (a.t === Z) z++; else s++;
   }
-  return { h, z, s, groups: groups.size };
+  return { h, z, s, i, groups: groups.size };
 }
 
 let hudT = 0;
@@ -3521,9 +3877,12 @@ function updateHud(now){
   G.maxZ = Math.max(G.maxZ, c.z);
   const K = c.h > 12000 ? 8 : c.h > 6000 ? 4 : c.h > 2500 ? 2 : 1;
   if (K !== G.coldK){ G.coldK = K; G.coldAcc.fill(0); }
-  $('#cH').textContent = c.h; $('#cZ').textContent = c.z; $('#cS').textContent = c.s; $('#cK').textContent = G.kills;
+  $('#cH').textContent = c.h; $('#cI').textContent = c.i; $('#cZ').textContent = c.z; $('#cS').textContent = c.s; $('#cK').textContent = G.kills;
+  $('#cI').parentElement.hidden = !c.i;
+  syncCooldowns();
   const tot = c.h + c.z + c.s || 1;
-  $('#barH').style.width = (c.h/tot*100) + '%';
+  $('#barH').style.width = ((c.h - c.i)/tot*100) + '%';
+  $('#barI').style.width = (c.i/tot*100) + '%';
   $('#barS').style.width = (c.s/tot*100) + '%';
   $('#barZ').style.width = (c.z/tot*100) + '%';
   $('#clock').textContent = fmtClock(G.time);
@@ -3579,6 +3938,9 @@ function openMenu(){
     ['Zombies', String(c.z)],
     ['Größte Horde', c.z ? `${biggestHorde()} Zombies` : '–'],
     ['Erledigt', String(G.kills)],
+    ['Geimpft', String(c.i)],
+    ['Geheilt', String(G.cured)],
+    ['Opfer der Bomben', String(G.dead)],
     ['Türme', `${fl} Flamme · ${te} Tesla`],
     ['Mauern', `${Math.round(G.walls.reduce((s, w) => s + w.len, 0))} m`]
   ].concat(G.region ? [['Orte', String(G.labels.length)]] : [])
@@ -3593,14 +3955,14 @@ function endScreen(won, c){
   running = false; syncPlay();
   const dur = fmtDur(G.time);
   if (won) showModal('Ausbruch eingedämmt', 'win', `Alle Zombies sind erledigt. ${c.h} Menschen haben überlebt.`, [
-    ['Dauer', dur], ['Überlebende', `${c.h} von ${G.humans0}`], ['Zombies erledigt', String(G.kills)], ['Höchststand Zombies', String(G.maxZ)]
+    ['Dauer', dur], ['Überlebende', `${c.h} von ${G.humans0}`], ['Zombies erledigt', String(G.kills)], ['Zombies geheilt', String(G.cured)], ['Höchststand Zombies', String(G.maxZ)], ['Opfer der Bomben', String(G.dead)]
   ], [
     { label:'Weiter zuschauen', cls:'primary', fn:() => { running = true; syncPlay(); } },
     { label:'Neu starten, gleiche Karte', fn:() => resetGame() },
     { label:'Anderen Ort wählen', cls:'ghost', fn:() => backToStart() }
   ]);
   else showModal(G.region ? 'Die Region ist gefallen' : 'Die Stadt ist gefallen', 'lose', `Kein Mensch ist mehr übrig. ${G.name} gehört den Zombies.`, [
-    ['Dauer', dur], ['Zombies erledigt', String(G.kills)], ['Höchststand Zombies', String(G.maxZ)]
+    ['Dauer', dur], ['Zombies erledigt', String(G.kills)], ['Zombies geheilt', String(G.cured)], ['Höchststand Zombies', String(G.maxZ)], ['Opfer der Bomben', String(G.dead)]
   ], [
     { label:'Neu starten, gleiche Karte', cls:'primary', fn:() => resetGame() },
     { label:'Weiter zuschauen', fn:() => { running = true; syncPlay(); } },
@@ -3817,6 +4179,7 @@ function frame(now){
     const cdt = Math.min(G.coldAcc[sel], 4*COLD_STEP); G.coldAcc[sel] = 0;   // bei ×10 gehen ferne Menschen etwas gemächlicher
     for (let k=0; k<n; k++) step(sdt, k === 0 ? cdt : 0, sel);
     G.time += gdt;
+    updStrikes(rdt); updSmoke(rdt);
     PERF.sim += performance.now() - t1;
   }
   const t2 = performance.now();
@@ -3827,7 +4190,7 @@ function frame(now){
 requestAnimationFrame(frame);
 
 // Test-Zugang für die Konsole
-window.__ausbruch = { get G(){ return G; }, cam, randomCity, randomRegion, decodeTile, addTile, emptyFeatures, placeOutbreak, placeSoldier, placeTower, addWall, setTool, step, updateFields, counts, tiles, zoomAt, render, PERF, launch, scentStart, scentStep, updateHordes };
+window.__ausbruch = { get G(){ return G; }, cam, randomCity, randomRegion, decodeTile, addTile, emptyFeatures, placeOutbreak, placeSoldier, placeTower, addWall, setTool, step, updateFields, counts, tiles, zoomAt, render, PERF, launch, scentStart, scentStep, updateHordes, dropBomb, callAirstrike, dropCure, explode, applyCure };
 </script>
 </body>
 </html>
