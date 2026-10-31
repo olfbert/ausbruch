@@ -37,17 +37,18 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;background:var(--void);color:var(--ink);overflow:hidden;
+html,body{height:100%;margin:0;background:var(--void);color:var(--ink);overflow:hidden;touch-action:none;
   font-family:var(--f-ui);font-size:16px;-webkit-text-size-adjust:100%;
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 button,select,input{font:inherit;color:inherit}
 button{touch-action:manipulation;cursor:pointer}
+#hud,#dock,#hud *,#dock *,#modal{touch-action:none}   /* Zwei Finger auf der Leiste zoomen nicht die ganze Seite */
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--zombie);outline-offset:2px}
 [hidden]{display:none!important}
 #map{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;background:var(--void)}
 
 /* ---------- Startbildschirm ---------- */
-#start{position:fixed;inset:0;overflow-y:auto;z-index:30;
+#start{position:fixed;inset:0;overflow-y:auto;z-index:30;touch-action:pan-y;
   background:
     linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px) 0 0/40px 40px,
     linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/40px 40px,
@@ -505,7 +506,9 @@ function resize(){
 }
 window.addEventListener('resize', () => { const old = VW; resize(); if (G && old) { cam.x += (VW-old)/2; clampCam(); } });
 resize();
-document.addEventListener('gesturestart', e => e.preventDefault());
+// Safari: eigenes Seiten-Zoomen (Zwei-Finger-Geste, Doppeltippen) abschalten, sonst verrutscht die ganze Oberfläche
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault(), { passive:false });
+document.addEventListener('dblclick', e => e.preventDefault(), { passive:false });
 
 // ---------- Zufall & Winkel ----------
 function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
@@ -1815,7 +1818,7 @@ function markMain(W, cell){
    5) KARTENBILD: ein Übersichtsbild der ganzen Karte und darüber
    Kacheln in Zoomstufen, die erst beim Hinsehen gezeichnet werden.
    ===================================================================== */
-const TILE_PX = 512, TILE_PAD = 2, TILE_PPM = 4, TILE_MAX = 44;
+const TILE_PX = 512, TILE_PAD = 2, TILE_PPM = 4, TILE_MAX = 64;
 const tiles = new Map(), tilePool = [];
 let tileFrame = 0;
 
@@ -1901,7 +1904,18 @@ function makeOverview(idx, size, batch){
   const c = makeCanvas(px, px), g = c.getContext('2d');
   g.setTransform(ppm, 0, 0, ppm, px/2, px/2);
   drawMap(g, idx.items, ppm, -size/2, -size/2, size/2, size/2, size, batch);
-  return { c, ppm, px };
+  // verkleinerte Fassungen, jeweils halb so groß: Herausgezoomt wird die passende genommen,
+  // sonst flimmern Häuser und Straßen beim Verkleinern
+  const levels = [{ c, ppm, px }];
+  let L = levels[0];
+  while (L.px > 400){
+    const npx = Math.round(L.px/2), nc = makeCanvas(npx, npx), ng = nc.getContext('2d');
+    ng.imageSmoothingEnabled = true; ng.imageSmoothingQuality = 'high';
+    ng.drawImage(L.c, 0, 0, npx, npx);
+    L = { c:nc, ppm:L.ppm*npx/L.px, px:npx };
+    levels.push(L);
+  }
+  return { c, ppm, px, levels };
 }
 
 const tileKey = (k, tx, ty) => k*1e8 + ty*1e4 + tx;
@@ -1935,10 +1949,14 @@ function drawBase(){
   const vx0 = Math.max(-half, -cam.x/s), vy0 = Math.max(-half, -cam.y/s);
   const vx1 = Math.min(half, (VW - cam.x)/s), vy1 = Math.min(half, (VH - cam.y)/s);
   if (vx1 <= vx0 || vy1 <= vy0) return;
-  const ov = G.ov, op = ov.ppm;
-  const sx0 = Math.max(0, Math.floor((vx0 + half)*op) - 1), sy0 = Math.max(0, Math.floor((vy0 + half)*op) - 1);
-  const sx1 = Math.min(ov.px, Math.ceil((vx1 + half)*op) + 1), sy1 = Math.min(ov.px, Math.ceil((vy1 + half)*op) + 1);
-  ctx.drawImage(ov.c, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0/op - half, sy0/op - half, (sx1 - sx0)/op, (sy1 - sy0)/op);
+  const op = G.ov.ppm;
+  // kleinste Fassung der Übersicht, die noch mindestens so scharf ist wie der Bildschirm
+  let ov = G.ov.levels[0];
+  for (const L of G.ov.levels) if (L.ppm >= sp*0.9) ov = L;
+  const lp = ov.ppm;
+  const sx0 = Math.max(0, Math.floor((vx0 + half)*lp) - 1), sy0 = Math.max(0, Math.floor((vy0 + half)*lp) - 1);
+  const sx1 = Math.min(ov.px, Math.ceil((vx1 + half)*lp) + 1), sy1 = Math.min(ov.px, Math.ceil((vy1 + half)*lp) + 1);
+  ctx.drawImage(ov.c, sx0, sy0, sx1 - sx0, sy1 - sy0, sx0/lp - half, sy0/lp - half, (sx1 - sx0)/lp, (sy1 - sy0)/lp);
   tileFrame++;
   if (sp <= op*1.15) return;
   const k = Math.max(0, Math.floor(Math.log2(TILE_PPM/sp)));
@@ -1952,27 +1970,37 @@ function drawBase(){
     const t = useTile(k, tx, ty);
     if (t) have.push([tx, ty, t]); else missing.push([tx, ty]);
   }
-  // fehlende Kacheln zeichnen, die mittleren zuerst, höchstens ~10 ms pro Bild
+  // fehlende Kacheln zeichnen, die mittleren zuerst. Während man zoomt, nur wenig (die Zoomstufe ändert
+  // sich ja gleich wieder), danach bis ~12 ms pro Bild
   if (missing.length){
     const mx = ((vx0 + vx1)/2 + half)/tw - 0.5, my = ((vy0 + vy1)/2 + half)/tw - 0.5;
     missing.sort((a, b) => ((a[0]-mx)**2 + (a[1]-my)**2) - ((b[0]-mx)**2 + (b[1]-my)**2));
-    const t0 = performance.now();
-    while (missing.length && performance.now() - t0 < 10){
+    const t0 = performance.now(), budget = (gesture && gesture.mode === 'pinch') || camAnim ? 3 : 12;
+    while (missing.length && performance.now() - t0 < budget){
       const [tx, ty] = missing.shift();
       storeTile(k, tx, ty, renderTile(k, tx, ty));
       have.push([tx, ty, useTile(k, tx, ty)]);
     }
   }
   const put = (cv, tx, ty, tws, pp) => ctx.drawImage(cv, TILE_PAD - 1, TILE_PAD - 1, TILE_PX + 2, TILE_PX + 2, tx*tws - half - 1/pp, ty*tws - half - 1/pp, tws + 2/pp, tws + 2/pp);
-  // noch fehlende: gröbere Kachel als Platzhalter, falls vorhanden
-  if (missing.length && ppm/2 > op*1.15){
+  // noch fehlende: Platzhalter aus einer anderen Zoomstufe, falls vorhanden
+  // (gröbere beim Hineinzoomen, feinere beim Herauszoomen)
+  if (missing.length){
     const done = new Set();
     for (const [tx, ty] of missing){
-      const px = tx >> 1, py = ty >> 1, key = tileKey(k + 1, px, py);
-      if (done.has(key)) continue;
-      done.add(key);
-      const p = useTile(k + 1, px, py);
-      if (p) put(p.c, px, py, tw*2, ppm/2);
+      let ok = false;
+      for (let up = 1; up <= 2 && !ok; up++){
+        if (ppm/(1 << up) <= op*1.15) break;
+        const px = tx >> up, py = ty >> up, key = tileKey(k + up, px, py);
+        if (done.has(key)){ ok = true; break; }
+        const p = useTile(k + up, px, py);
+        if (p){ done.add(key); put(p.c, px, py, tw*(1 << up), ppm/(1 << up)); ok = true; }
+      }
+      if (ok || k === 0) continue;
+      for (let j = 0; j < 4; j++){
+        const cx = tx*2 + (j & 1), cy = ty*2 + (j >> 1), c = useTile(k - 1, cx, cy);
+        if (c) put(c.c, cx, cy, tw/2, ppm*2);
+      }
     }
   }
   for (const [tx, ty, t] of have) put(t.c, tx, ty, tw, ppm);
@@ -2074,7 +2102,7 @@ async function newGame(m, humans, say){
     CW, NC, zc: new Uint8Array(NC), hc: new Uint8Array(NC), zN: new Uint8Array(NC), hN: new Uint8Array(NC),
     tA: new Uint8Array(NC), tB: new Uint8Array(NC), rH: new Uint8Array(NC), rZ: new Uint8Array(NC), tch: new Uint8Array(NC),
     listH: [], listZ: [], fieldFlip: false, fieldSlow: false,
-    coldK: 1, coldAcc: new Float64Array(32), frameNo: 0, fieldNext: 0, sepTick: 0, hashAge: 0, hotL: [], coldL: [], classCam: 0, stepMs: 2,
+    coldK: 1, coldAcc: new Float64Array(32), frameNo: 0, fieldNext: 0, sepTick: 0, hashAge: 0, hotL: [], coldL: [], classV: null, stepMs: 2,
     agents: [], walls: [], towers: [], corpses: [], fx: [], tracers: [], bolts: [], parts: [],
     time: 0, fieldT: 0, started: false, ended: false, kills: 0, maxZ: 0, humans0: 0, _lastKills: -1,
     ph: newHash(), zh: newHash(),
@@ -2945,7 +2973,7 @@ function classify(){
   if (g.coldL.length !== K) g.coldL = Array.from({ length:K }, () => []);
   for (const l of g.coldL) l.length = 0;
   const vs = cam.s >= 0.8, m = 60/cam.s, vx0 = -cam.x/cam.s - m, vy0 = -cam.y/cam.s - m, vx1 = (VW - cam.x)/cam.s + m, vy1 = (VH - cam.y)/cam.s + m;
-  g.classCam = cam.x + cam.y*7 + cam.s*1e5;
+  g.classV = { vs, x0:vx0, y0:vy0, x1:vx1, y1:vy1 };
   for (const a of g.agents){
     if (!a.alive) continue;
     const t = a.t;
@@ -2964,9 +2992,11 @@ function classify(){
 function step(dt, coldDt, coldSel, zDt){
   const g = G;
   // Nachbar-Gitter und Einteilung höchstens alle 0,5 s Spielzeit neu (bei 100.000 Leuten spürbar teuer),
-  // sofort, wenn die Ansicht sich deutlich bewegt hat
+  // sofort, wenn man hineingezoomt ist und die Ansicht den eingeteilten Bereich verlässt
   g.hashAge -= dt;
-  if (g.hashAge <= 0 || Math.abs(g.classCam - (cam.x + cam.y*7 + cam.s*1e5)) > 40){
+  const cv0 = g.classV, vsN = cam.s >= 0.8;
+  const moved = !cv0 || vsN !== cv0.vs || (vsN && (-cam.x/cam.s < cv0.x0 || -cam.y/cam.s < cv0.y0 || (VW - cam.x)/cam.s > cv0.x1 || (VH - cam.y)/cam.s > cv0.y1));
+  if (g.hashAge <= 0 || moved){
     buildHash(g.ph, a => a.t !== Z); buildHash(g.zh, a => a.t === Z); classify(); g.hashAge = 0.5;
   }
   g.sepTick = g.sepTick ? 0 : 1;
@@ -3584,13 +3614,11 @@ function pixelDots(lists, s){
   const u = PD.u, k = s*dpr, m = ctx.getTransform(), ox = m.e, oy = m.f;
   u.fill(0);
   for (const [arr, col, sz] of lists){
+    const o = sz >> 1;
     for (let j = 0; j < arr.length; j++){
-      const a = arr[j], x = (ox + a.x*k) | 0, y = (oy + a.y*k) | 0;
+      const a = arr[j], x = ((ox + a.x*k) | 0) - o, y = ((oy + a.y*k) | 0) - o;
       if (x < 0 || y < 0 || x > w - sz || y > h - sz) continue;
-      let i = y*w + x;
-      u[i] = col; u[i + 1] = col; if (sz > 2) u[i + 2] = col;
-      i += w; u[i] = col; u[i + 1] = col; if (sz > 2) u[i + 2] = col;
-      if (sz > 2){ i += w; u[i] = col; u[i + 1] = col; u[i + 2] = col; }
+      for (let r = 0, i = y*w + x; r < sz; r++, i += w) u.fill(col, i, i + sz);
     }
   }
   PD.g.putImageData(PD.img, 0, 0);
@@ -3598,7 +3626,7 @@ function pixelDots(lists, s){
 }
 // Punkte: sind es sehr viele kleine, werden Quadrate gezeichnet (viel schneller als Kreise)
 function dots(list, rad, many){
-  if (list.length > (many || 2500) && rad*cam.s < 6){
+  if (list.length > (many || 2500) && rad*cam.s < 3){
     const d = rad*1.8;
     ctx.beginPath();
     for (const a of list) ctx.rect(a.x - d/2, a.y - d/2, d, d);
@@ -3802,7 +3830,8 @@ function render(now, rdt){
   }
   // Sehr viele kleine Punkte (weit herausgezoomt, Zehntausende Menschen): direkt als Pixel setzen,
   // das ist viel schneller als Zehntausende Formen
-  const pix = crowd > 6000 && rd*s < 1.6;
+  const pdev = Math.max(2, Math.min(6, Math.round(2*rd*s*dpr)));   // Punktgröße in Gerätepixeln
+  const pix = crowd > 6000 && rd*s*dpr <= 3;
   // Zombie-Schein, Brand
   if (!pix){ ctx.fillStyle = COL.zombieGlow; dots(zs, rd*2.6, 5000); ctx.fill(); }
   const burning = zs.filter(z => z.burn > 0);
@@ -3819,7 +3848,7 @@ function render(now, rdt){
   // Menschen (Geimpfte blau, mit Dosis leuchtend), Zombies
   const hn = [], hi = [], hc = [];
   for (const a of hs){ if (a.imm){ hi.push(a); if (a.dose > 0) hc.push(a); } else hn.push(a); }
-  if (pix) pixelDots([[hn, 0xFFF8F6F4, 2], [hi, 0xFFFFB27F, 2], [zs, 0xFF7AFF5C, 3]], s);
+  if (pix) pixelDots([[hn, 0xFFF8F6F4, pdev], [hi, 0xFFFFB27F, pdev], [zs, 0xFF7AFF5C, Math.min(6, pdev + 1)]], s);
   else {
     if (hc.length){ ctx.fillStyle = COL.immuneGlow; dots(hc, rd*2.4, 5000); ctx.fill(); }
     ctx.fillStyle = COL.human; dots(hn, rd); ctx.fill();
@@ -3972,13 +4001,18 @@ cv.addEventListener('pointerdown', e => {
   if (pointers.size === 1){
     gesture = { mode: (tool === 'wall' || tool === 'air') ? 'draw' : 'pan', sx:e.clientX, sy:e.clientY, lx:e.clientX, ly:e.clientY, moved:false };
     if (gesture.mode === 'draw') wallDraft = [toWorld(e.clientX, e.clientY)];
-  } else if (pointers.size === 2){
+  } else {
     wallDraft = null;
-    const [p1, p2] = [...pointers.values()];
-    gesture = { mode:'pinch', d0: Math.hypot(p2.x-p1.x, p2.y-p1.y) || 1, s0: cam.s,
-      wx:((p1.x+p2.x)/2 - cam.x)/cam.s, wy:((p1.y+p2.y)/2 - cam.y)/cam.s, moved:true };
+    startPinch();
   }
 });
+// Zoomen mit zwei Fingern: der Punkt unter der Fingermitte bleibt unter den Fingern.
+// Neu ansetzen, sobald ein Finger dazukommt oder geht, damit nichts springt.
+function startPinch(){
+  const [p1, p2] = [...pointers.values()];
+  gesture = { mode:'pinch', d0: Math.hypot(p2.x-p1.x, p2.y-p1.y) || 1, s0: cam.s,
+    wx:((p1.x+p2.x)/2 - cam.x)/cam.s, wy:((p1.y+p2.y)/2 - cam.y)/cam.s, moved:true };
+}
 cv.addEventListener('pointermove', e => {
   if (!G || !pointers.has(e.pointerId)) return;
   pointers.set(e.pointerId, { x:e.clientX, y:e.clientY });
@@ -4014,7 +4048,8 @@ function endPointer(e){
     }
     wallDraft = null; gesture = null;
   } else if (gesture.mode === 'pinch'){
-    if (pointers.size === 1){
+    if (pointers.size >= 2) startPinch();
+    else if (pointers.size === 1){
       const [p] = [...pointers.values()];
       gesture = { mode:'pan', sx:p.x, sy:p.y, lx:p.x, ly:p.y, moved:true };
     } else if (!pointers.size) gesture = null;
@@ -4033,7 +4068,8 @@ cv.addEventListener('wheel', e => {
   e.preventDefault();
   camAnim = null;
   const [wx, wy] = toWorld(e.clientX, e.clientY);
-  cam.s *= Math.exp(-e.deltaY*0.0015);
+  const dy = e.deltaMode === 1 ? e.deltaY*33 : e.deltaMode === 2 ? e.deltaY*400 : e.deltaY;
+  cam.s *= Math.exp(-Math.max(-300, Math.min(300, dy))*0.0015);
   clampCam();
   cam.x = e.clientX - wx*cam.s; cam.y = e.clientY - wy*cam.s;
   clampCam();
