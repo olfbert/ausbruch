@@ -489,6 +489,7 @@ async function geocode(q){
   return res;
 }
 
+const PLACE_RE = '^(city|town|village|suburb|quarter|neighbourhood|hamlet)$';
 function buildQuery(lat, lon, size){
   const half = size/2*1.08;
   const dLat = half/110540, dLon = half/(111320*Math.cos(lat*Math.PI/180));
@@ -507,6 +508,7 @@ function buildQuery(lat, lon, size){
  way["landuse"~"^(grass|meadow|forest|recreation_ground|village_green|cemetery|allotments)$"](${bb});
  way["natural"~"^(wood|scrub)$"](${bb});
  way["railway"~"^(rail|tram|light_rail|subway)$"](${bb});
+ node["place"~"${PLACE_RE}"](${bb});
 );
 out geom qt;`;
 }
@@ -683,6 +685,10 @@ async function fetchTileBuf(url){
   throw last;
 }
 
+// Ortsnamen aus der Karte: Art → ungefährer Radius in m (bestimmt, ab welchem Zoom der Name erscheint)
+const PLACE_R = { city:3500, town:1500, village:450, suburb:700, quarter:350, neighbourhood:220, hamlet:150 };
+const PLACE_ORDER = { city:0, town:1, village:2, suburb:3, quarter:4, neighbourhood:5, hamlet:6 };
+
 const TILE_ROAD_W = { motorway:16, trunk:14, primary:12, secondary:10, tertiary:9, minor:7, service:4.5, track:3.5, path:2.5, raceway:6, busway:6, pier:4, bridge:6 };
 
 // Eine dekodierte Kachel in Meter-Koordinaten (0,0 = Kartenmitte) übernehmen
@@ -735,6 +741,24 @@ function addTile(f, layers, tx, ty, lat0, lon0, half){
   });
   each('park', (p, parts, t) => { if (t === 3) f.green.push(parts); });
   each('landuse', (p, parts, t) => { if (t === 3 && /^(cemetery|pitch|playground|stadium|garden)$/.test(p.class)) f.green.push(parts); });
+  // Ortsnamen (Punkte): Städte, Dörfer, Stadtteile
+  const PL = layers.place;
+  if (PL){
+    const ext = PL.extent || 4096;
+    for (const F of PL.feats){
+      if (F.type !== 1) continue;
+      const p = {};
+      for (let i=0; i+1<F.tags.length; i+=2) p[PL.keys[F.tags[i]]] = PL.values[F.tags[i+1]];
+      const kind = String(p.class || ''), name = p['name:de'] || p.name_de || p.name;
+      if (!PLACE_R[kind] || !name) continue;
+      for (const pt of featGeom(F.geom)){
+        const [px, py] = pt[0], X = (tx + px/ext)/n, Y = (ty + py/ext)/n;
+        const lon = X*360 - 180, lat = Math.atan(Math.sinh(Math.PI*(1 - 2*Y)))*180/Math.PI;
+        const x = (lon - lon0)*kx, y = -(lat - lat0)*ky;
+        if (Math.abs(x) < half && Math.abs(y) < half) f.places.push({ name:String(name), x, y, kind });
+      }
+    }
+  }
 }
 
 async function fetchTilesArea(lat0, lon0, size, onStatus){
@@ -794,6 +818,9 @@ function parseOSM(json, lat0, lon0){
       if (pts.length < 2) continue;
       const closed = el.nodes ? (el.nodes[0]===el.nodes[el.nodes.length-1]) : samePt(pts[0], pts[pts.length-1]);
       classifyWay(t, pts, closed, f);
+    } else if (el.type==='node'){
+      const name = t['name:de'] || t.name;
+      if (t.place && PLACE_R[t.place] && name && el.lat != null){ const [x, y] = P(el); f.places.push({ name, x, y, kind:t.place }); }
     } else if (el.type==='relation'){
       const segs = (el.members||[]).filter(m => m.type==='way' && m.geometry)
         .map(m => m.geometry.filter(Boolean).map(P)).filter(s => s.length>=2);
@@ -807,7 +834,7 @@ function parseOSM(json, lat0, lon0){
 }
 
 function emptyFeatures(){
-  return { buildings:[], water:[], waterLines:[], roads:[], roadAreas:[], barriers:[], green:[], wood:[], rails:[], fields:[] };
+  return { buildings:[], water:[], waterLines:[], roads:[], roadAreas:[], barriers:[], green:[], wood:[], rails:[], fields:[], places:[] };
 }
 
 function classifyWay(t, pts, closed, f){
@@ -1903,26 +1930,33 @@ function drawBase(){
 
 // Ortsnamen, wenn man weit herausgezoomt ist
 const LABEL_FONT = '"Barlow Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif';
+// Wann ein Name erscheint: wenn der Ort auf dem Bildschirm zwischen 10 px und gut halb so groß ist.
+// So stehen weit draußen Städte und Dörfer, beim Hineinzoomen die Stadtteile.
+const LABEL_STYLE = {
+  city:  [17, 700, 'rgba(240,244,247,0.95)'], town: [15, 700, 'rgba(240,244,247,0.95)'], village: [13, 600, 'rgba(214,222,228,0.9)'],
+  suburb: [12.5, 600, 'rgba(190,201,210,0.85)'], quarter: [11.5, 600, 'rgba(176,188,198,0.8)'], neighbourhood: [11, 600, 'rgba(176,188,198,0.8)'],
+  hamlet: [11, 500, 'rgba(176,188,198,0.8)']
+};
 function drawLabels(){
-  if (!G.labels || cam.s > 0.9) return;
+  if (!G.labels || cam.s > 2.5) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
   const boxes = [];
   for (const l of G.labels){
-    const rpx = l.r*cam.s;
-    if (rpx < 10 || rpx > Math.min(VW, VH)*0.6) continue;
+    const rpx = l.r*cam.s, big = l.kind === 'city' || l.kind === 'town';
+    if (rpx < 10 || rpx > Math.min(VW, VH)*(big ? 0.6 : 1)) continue;   // Stadtteile bleiben beim Hineinzoomen länger stehen
     let sx = cam.x + l.x*cam.s;
     const sy = cam.y + l.y*cam.s;
     if (sx < -60 || sx > VW + 60 || sy < -20 || sy > VH + 20) continue;
-    const fs = l.kind === 'city' ? 17 : l.kind === 'town' ? 14 : 12;
-    ctx.font = `${l.kind === 'village' ? 600 : 700} ${fs}px ${LABEL_FONT}`;
+    const [fs, fw, col] = LABEL_STYLE[l.kind] || LABEL_STYLE.village;
+    ctx.font = `${fw} ${fs}px ${LABEL_FONT}`;
     const txt = l.name.toUpperCase(), w = ctx.measureText(txt).width + 10, h = fs + 6;
     if (w < VW - 8) sx = Math.min(VW - 4 - w/2, Math.max(4 + w/2, sx));
     const b = [sx - w/2, sy - h/2, sx + w/2, sy + h/2];
     if (boxes.some(o => b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1])) continue;
     boxes.push(b);
     ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(7,10,13,0.85)'; ctx.strokeText(txt, sx, sy);
-    ctx.fillStyle = l.kind === 'village' ? 'rgba(200,209,216,0.85)' : 'rgba(240,244,247,0.95)';
+    ctx.fillStyle = col;
     ctx.fillText(txt, sx, sy);
   }
 }
@@ -1957,8 +1991,18 @@ async function newGame(m, humans, say){
   const ov = makeOverview(idx, size, batch);
   const N = W*W, CW = Math.ceil(W/CS), NC = CW*CW;
   const distH = new Uint8Array(N), distZ = new Uint8Array(N);
-  const order = { city:0, town:1, village:2 };
   const towns = m.towns || null;
+  // Ortsnamen: Zufallsregion (Orte mit echtem Radius) oder echte Karte (Ortspunkte, doppelte zusammengefasst)
+  let labels = null;
+  if (towns) labels = towns.map(t => ({ name:t.name, x:t.x, y:t.y, r:t.r, kind:t.kind }));
+  else if (f.places && f.places.length){
+    labels = [];
+    for (const p of f.places){
+      if (labels.some(l => l.name === p.name && Math.hypot(l.x - p.x, l.y - p.y) < 400)) continue;
+      labels.push({ name:p.name, x:p.x, y:p.y, r:PLACE_R[p.kind] || 300, kind:p.kind });
+    }
+  }
+  if (labels) labels.sort((a, b) => (PLACE_ORDER[a.kind] ?? 9) - (PLACE_ORDER[b.kind] ?? 9) || b.r - a.r);
   // ohne Ortsliste (echte Karten, Stadtkarten): Hausmittelpunkte, damit Menschen dort wohnen, wo Häuser stehen
   let bld = null;
   if (!towns && f.buildings.length >= 50){
@@ -1973,7 +2017,7 @@ async function newGame(m, humans, say){
   }
   G = {
     f, size, half:size/2, name:m.name, W, N, cell, mainCount, idx, batch, ov,
-    labels: towns ? towns.slice().sort((a, b) => order[a.kind] - order[b.kind] || b.r - a.r) : null,
+    labels, region: !!towns,
     zones: towns ? towns.map(t => ({ x:t.x, y:t.y, r:t.r*0.85, w:t.r*t.r })) : null, bld,
     wallN: new Map(), towerN: new Map(),
     distH, distZ, q: new Int32Array(1 << 16),
@@ -3537,7 +3581,7 @@ function openMenu(){
     ['Erledigt', String(G.kills)],
     ['Türme', `${fl} Flamme · ${te} Tesla`],
     ['Mauern', `${Math.round(G.walls.reduce((s, w) => s + w.len, 0))} m`]
-  ].concat(G.labels ? [['Orte', String(G.labels.length)]] : [])
+  ].concat(G.region ? [['Orte', String(G.labels.length)]] : [])
    .concat(lastMap.seed != null ? [['Größe', fmtSize(lastMap.size)], ['Seed', lastMap.seedLabel]] : []), [
     { label:'Weiter', cls:'primary', fn:() => { running = true; syncPlay(); } },
     { label:'Neu starten, gleiche Karte', fn:() => resetGame() }
@@ -3555,7 +3599,7 @@ function endScreen(won, c){
     { label:'Neu starten, gleiche Karte', fn:() => resetGame() },
     { label:'Anderen Ort wählen', cls:'ghost', fn:() => backToStart() }
   ]);
-  else showModal(G.labels ? 'Die Region ist gefallen' : 'Die Stadt ist gefallen', 'lose', `Kein Mensch ist mehr übrig. ${G.name} gehört den Zombies.`, [
+  else showModal(G.region ? 'Die Region ist gefallen' : 'Die Stadt ist gefallen', 'lose', `Kein Mensch ist mehr übrig. ${G.name} gehört den Zombies.`, [
     ['Dauer', dur], ['Zombies erledigt', String(G.kills)], ['Höchststand Zombies', String(G.maxZ)]
   ], [
     { label:'Neu starten, gleiche Karte', cls:'primary', fn:() => resetGame() },
@@ -3646,7 +3690,7 @@ async function launch(getMap){
 
 async function loadReal(lat, lon, name){
   const size = +$('#area').value;
-  const key = `v2:${lat.toFixed(4)},${lon.toFixed(4)},${size}`;
+  const key = `v3:${lat.toFixed(4)},${lon.toFixed(4)},${size}`;   // v3: mit Ortsnamen
   await say('Prüfe Zwischenspeicher …');
   let f = await cacheGet(key);
   if (!f){
