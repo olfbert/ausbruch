@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Saira+Stencil+One&display=swap">
 <style>
-/* Layout: Vollbild-Lagekarte bei Nacht. Oben das Lage-HUD, unten die Werkzeugleiste, dazwischen nur Karte. */
+/* Layout: Vollbild-Lagekarte bei Nacht. Oben das Lage-HUD, unten Werkzeuge mit ausklappbarer Bau-Leiste, dazwischen nur Karte. */
 :root{
   --void:#070a0d;        /* außerhalb der Karte */
   --ground:#0e1317;      /* Freifläche */
@@ -24,6 +24,8 @@
   --human:#f4f6f8;
   --zombie:#5cff7a;
   --soldier:#ffb43a;
+  --flame:#ff7a2e;
+  --tesla:#6fe3ff;
   --wall:#d9c7a5;
   --alert:#ff5f52;
   --f-display:"Saira Stencil One","Arial Black",Impact,sans-serif;
@@ -59,7 +61,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 #start h1 span{color:var(--zombie)}
 .lead{margin:0;font-size:19px;line-height:1.35;color:#c8d1d8;max-width:36ch;font-weight:500}
 .legend{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;margin:0;padding:12px 14px;border:1px solid var(--panel-line);border-radius:10px;background:rgba(0,0,0,.25)}
-.legend dt{display:flex;align-items:center}
+.legend dt{display:flex;align-items:center;justify-content:center;width:14px}
 .legend dd{margin:0;font-size:15px;color:#c8d1d8}
 .legend dd b{color:var(--ink);font-weight:600}
 .legend .num{font-family:var(--f-num);font-size:12px;color:var(--muted)}
@@ -67,6 +69,9 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .dot.h{background:var(--human)}
 .dot.z{background:var(--zombie);box-shadow:0 0 0 4px rgba(92,255,122,.18)}
 .dot.s{background:var(--soldier);box-shadow:0 0 0 2px #1a1206 inset}
+.mk{display:inline-block;width:12px;height:12px;flex:none}
+.mk.f{background:#23150d;border:2px solid var(--flame);border-radius:2px}
+.mk.t{background:#0c1c26;border:2px solid var(--tesla);border-radius:50%;box-shadow:0 0 6px rgba(111,227,255,.6)}
 .form{display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:6px;min-width:0}
 .field label{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
@@ -123,17 +128,26 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
 #scale i{display:block;height:6px;border:1.5px solid #c8d1d8;border-top:0;box-shadow:0 1px 2px rgba(0,0,0,.6)}
 .osm{font-size:11px;color:var(--muted);text-shadow:0 1px 2px #000;pointer-events:auto}
 .osm a{color:var(--muted)}
-.tools{pointer-events:auto;display:flex;justify-content:space-between;gap:1px;background:var(--panel);border:1px solid var(--panel-line);border-radius:16px;padding:6px;
+.tools,.tray{pointer-events:auto;display:flex;justify-content:space-between;background:var(--panel);border:1px solid var(--panel-line);
   -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.tools{gap:1px;border-radius:16px;padding:6px}
+.tray{gap:4px;border-radius:14px;padding:5px}
 .tool{--c:var(--ink);flex:1 1 0;min-width:0;height:54px;border:0;border-radius:11px;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);padding:0}
 .tool svg{width:22px;height:22px}
-.tool span{font-size:12px;font-weight:600;letter-spacing:0;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:clip;font-stretch:condensed}
+.tool span{font-size:12px;font-weight:600;letter-spacing:0;white-space:nowrap;max-width:100%;overflow:hidden;font-stretch:condensed}
 .tool strong{font-family:var(--f-num);font-size:16px;line-height:22px;color:var(--ink);font-weight:600}
 .tool.on{background:rgba(255,255,255,.08);color:var(--c)}
-.tool[data-tool=outbreak]{--c:var(--zombie)}
-.tool[data-tool=wall]{--c:var(--wall)}
-.tool[data-tool=soldier]{--c:var(--soldier)}
-.tool[data-tool=erase]{--c:var(--alert)}
+.chip{--c:var(--ink);flex:1 1 0;min-width:0;height:42px;border:1px solid transparent;border-radius:10px;background:transparent;color:var(--muted);
+  display:flex;align-items:center;justify-content:center;gap:6px;padding:0 4px;font-size:15px;font-weight:600}
+.chip svg{width:19px;height:19px;flex:none}
+.chip span{white-space:nowrap;overflow:hidden}
+.chip.on{background:rgba(255,255,255,.07);border-color:var(--c);color:var(--c)}
+[data-tool=outbreak]{--c:var(--zombie)}
+[data-tool=erase]{--c:var(--alert)}
+[data-build=wall]{--c:var(--wall)}
+[data-build=soldier]{--c:var(--soldier)}
+[data-build=flame]{--c:var(--flame)}
+[data-build=tesla]{--c:var(--tesla)}
 .sep{width:1px;background:var(--panel-line);margin:8px 2px;flex:none}
 
 /* ---------- Dialog ---------- */
@@ -150,11 +164,10 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
 .btns{display:flex;flex-direction:column;gap:8px}
 
 @media (min-width:700px){
-  .hud-card{margin:0}
   #hud{padding-left:max(16px,env(safe-area-inset-left,0px))}
-  .hud-card{max-width:420px}
+  .hud-card{margin:0;max-width:420px}
 }
-@media (max-width:400px){.tool span{font-size:11px}.tool svg{width:20px;height:20px}}
+@media (max-width:400px){.tool span{font-size:11px}.tool svg{width:20px;height:20px}.chip{font-size:14px;gap:4px}}
 @media (prefers-reduced-motion:reduce){.popbar i{transition:none}}
 </style>
 </head>
@@ -166,11 +179,13 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
   <div class="start-inner">
     <div class="eyebrow">Simulation auf OpenStreetMap</div>
     <h1>AUS<span>BRUCH</span></h1>
-    <p class="lead">Wähle einen echten Ort. Menschen laufen durch die Straßen, bis du den ersten Zombie aussetzt. Wer berührt wird, wird selbst einer.</p>
+    <p class="lead">Wähle einen echten Ort. Menschen ziehen in Gruppen durch die Straßen, bis du den ersten Zombie aussetzt. Wer berührt wird, wird selbst einer.</p>
     <dl class="legend">
-      <dt><span class="dot h"></span></dt><dd><b>Mensch</b> <span class="num">· 1,4 m/s</span></dd>
+      <dt><span class="dot h"></span></dt><dd><b>Mensch</b> <span class="num">· 1,4 m/s, meist in Gruppen</span></dd>
       <dt><span class="dot z"></span></dt><dd><b>Zombie</b> <span class="num">· 2,8 m/s</span></dd>
       <dt><span class="dot s"></span></dt><dd><b>Soldat</b> <span class="num">· schießt bis 30 m</span></dd>
+      <dt><span class="mk f"></span></dt><dd><b>Flammenturm</b> <span class="num">· 16 m, setzt in Brand</span></dd>
+      <dt><span class="mk t"></span></dt><dd><b>Teslaturm</b> <span class="num">· 26 m, Blitz springt weiter</span></dd>
     </dl>
     <div class="form">
       <div class="field">
@@ -231,6 +246,24 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
       <div id="scale"><i style="width:80px"></i><span>100 m</span></div>
       <div class="osm">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
     </div>
+    <div id="tray" class="tray" role="toolbar" aria-label="Bauen" hidden>
+      <button class="chip" data-build="wall" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 9.7h18M3 14.3h18M9 5v4.7M15 5v4.7M6 9.7v4.6M12 9.7v4.6M18 9.7v4.6M9 14.3V19M15 14.3V19"/></svg>
+        <span>Mauer</span>
+      </button>
+      <button class="chip" data-build="soldier" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>
+        <span>Soldat</span>
+      </button>
+      <button class="chip" data-build="flame" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 2.8c.6 3.2 4.6 5 4.6 10a4.6 4.6 0 0 1-9.2 0c0-2.3 1.1-3.8 2.3-4.9.1 1.7.9 2.8 2 3.2-.4-3 .2-5.6.3-8.3z"/><path d="M10.3 16.4a1.8 1.8 0 0 0 3.4.4"/></svg>
+        <span>Flamme</span>
+      </button>
+      <button class="chip" data-build="tesla" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M13.5 2.5 5.5 13.5h5.5l-1 8 8.5-11.5h-5.8z"/></svg>
+        <span>Tesla</span>
+      </button>
+    </div>
     <div class="tools" role="toolbar" aria-label="Werkzeuge">
       <button class="tool" data-tool="pan" type="button" aria-label="Ansicht">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>
@@ -240,13 +273,9 @@ input[type=range]{width:100%;accent-color:var(--zombie);height:46px}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>
         <span>Ausbruch</span>
       </button>
-      <button class="tool" data-tool="wall" type="button" aria-label="Mauer">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M3 9.7h18M3 14.3h18M9 5v4.7M15 5v4.7M6 9.7v4.6M12 9.7v4.6M18 9.7v4.6M9 14.3V19M15 14.3V19"/></svg>
-        <span>Mauer</span>
-      </button>
-      <button class="tool" data-tool="soldier" type="button" aria-label="Soldat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>
-        <span>Soldat</span>
+      <button class="tool" data-tool="build" id="buildBtn" type="button" aria-label="Bauen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6 21V8.5h2.6v2.3h2.1V8.5h2.6v2.3h2.1V8.5H18V21z"/><path d="M10.5 21v-4.2h3V21M4.5 21h15"/></svg>
+        <span>Bauen</span>
       </button>
       <button class="tool" data-tool="erase" type="button" aria-label="Abriss">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v5M14 11v5"/></svg>
@@ -289,17 +318,36 @@ const ZOMBIE_SPEED = HUMAN_SPEED*2; // doppelt so schnell
 const TIME_BASE = 10;               // Spielsekunden pro echter Sekunde bei ×1
 const SPEEDS = [1, 2, 4];
 const ZOMBIE_SENSE = 40;            // Zellen Laufweg (= 80 m): so weit wittern Zombies Beute
-const HUMAN_FEAR = 14;              // Zellen Laufweg (= 28 m): ab hier fliehen Menschen
 const BITE_DIST = 1.6;              // m: Berührung
-const SOLDIER_RANGE = 30;           // m
-const SOLDIER_COOLDOWN = 0.9;       // s zwischen Schüssen
-const SOLDIER_HIT = 0.75;           // Trefferquote
+const ZOMBIE_HP = 100;
+
+// Rudelverhalten
+const GROUP_MAX = 12;               // größte Gruppe
+const FEAR_SELF = 7;                // Zellen (14 m): jeder rennt für sich los
+const HUMAN_FEAR = 14;              // Zellen (28 m): die ganze Gruppe gerät in Panik
+const LEADER_SIGHT = 26;            // Zellen (52 m): so weit sieht der Anführer Zombies kommen
+const PANIC_TIME = 4;               // s, so lange hält die Panik an
+const TRAIL_STEP = 1;               // m Abstand der Spurpunkte des Anführers
+const TRAIL_MAX = 70;               // Spurpunkte, danach ist man abgehängt
+
+// Verteidigung
+const SOLDIER_RANGE = 30, SOLDIER_COOLDOWN = 0.9, SOLDIER_HIT = 0.75, SOLDIER_DMG = 100;
+const FLAME_RANGE = 16;             // m
+const FLAME_HALF = 0.5;             // rad, halber Öffnungswinkel (≈ 29°)
+const FLAME_DPS = 90;               // Schaden pro Sekunde im Kegel
+const FLAME_TURN = 3;               // rad/s Drehgeschwindigkeit
+const BURN_TIME = 3, BURN_DPS = 20; // Nachbrennen
+const TESLA_RANGE = 26, TESLA_COOLDOWN = 1.8, TESLA_DMG = 120, TESLA_FALLOFF = 0.8;
+const TESLA_CHAIN = 5, TESLA_JUMP = 10, TESLA_STUN = 0.8;
+const TOWER_R = 2.2;                // m Grundfläche (Radius)
+
 const WALL_THICK = 1.6;             // m Radius beim Mauer-Rastern
 const FIELD_INTERVAL = 0.3;         // s Spielzeit zwischen Wegfeld-Updates
 const MAX_SUBSTEP = 0.25;           // s Spielzeit pro Simulationsschritt
 const INF = 32767;
 const TAU = Math.PI*2;
 const H = 0, Z = 1, S = 2;          // Agententypen
+const BUILD = new Set(['wall', 'soldier', 'flame', 'tesla']);
 
 // Kartenfarben (Lagekarte bei Nacht)
 const COL = {
@@ -309,7 +357,9 @@ const COL = {
   bldg:'#1a2430', bldgEdge:'#32475d', barrier:'#4a5866', rail:'#3a4048',
   frame:'#3a4a58', grid:'rgba(255,255,255,0.035)',
   human:'#f4f6f8', zombie:'#5cff7a', zombieGlow:'rgba(92,255,122,0.17)',
-  soldier:'#ffb43a', soldierRing:'#1a1206', wall:'#d9c7a5', wallEdge:'#5b4f3d', corpse:'rgba(70,150,85,0.45)'
+  soldier:'#ffb43a', soldierRing:'#1a1206', wall:'#d9c7a5', wallEdge:'#5b4f3d',
+  flame:'#ff7a2e', flameBase:'#23150d', tesla:'#6fe3ff', teslaBase:'#0c1c26',
+  corpse:'rgba(70,150,85,0.45)', ash:'rgba(90,60,40,0.6)'
 };
 
 // ---------- DOM ----------
@@ -325,9 +375,10 @@ window.addEventListener('resize', () => { const old = VW; resize(); if (G && old
 resize();
 document.addEventListener('gesturestart', e => e.preventDefault());
 
-// ---------- Zufall ----------
+// ---------- Zufall & Winkel ----------
 function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
 const rand = Math.random;
+function angDiff(a, b){ let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; }
 
 /* =====================================================================
    1) KARTENDATEN LADEN
@@ -534,11 +585,9 @@ function demoFeatures(){
   const f = emptyFeatures();
   const half = 400;
   const riverY = x => 70 + 38*Math.sin(x/140) + 10*Math.sin(x/47);
-  // Fluss
   const river = [];
   for (let x=-460; x<=460; x+=10) river.push([x, riverY(x)]);
   f.waterLines.push({ pts:river, w:24 });
-  // Straßenraster
   const xs = [-350,-245,-135,-25,85,195,300];
   const ys = [-345,-235,-125,-15,165,265,355];
   const bridges = new Set([1,4,6]);
@@ -555,20 +604,16 @@ function demoFeatures(){
     const w = (i===2) ? 11 : 7;
     f.roads.push({ pts:[[-half-30,y],[half+30,y+(rnd()-0.5)*10]], w, major:i===2, small:false });
   });
-  // Uferweg nördlich des Flusses
   const promenade = [];
   for (let x=-460; x<=460; x+=10) promenade.push([x, riverY(x)-20]);
   f.roads.push({ pts:promenade, w:3, small:true });
-  // Park mit Teich
   const px0 = xs[4], px1 = xs[5], py0 = ys[0], py1 = ys[1];
   f.green.push([[[px0+5,py0+5],[px1-5,py0+5],[px1-5,py1-5],[px0+5,py1-5]]]);
   const pond = []; for (let a=0; a<TAU; a+=0.3) pond.push([ (px0+px1)/2 + 26*Math.cos(a), (py0+py1)/2 + 18*Math.sin(a) ]);
   f.water.push([pond]);
   f.roads.push({ pts:[[px0,py0],[px1,py1]], w:2.6, small:true });
   f.roads.push({ pts:[[px1,py0],[(px0+px1)/2+30,(py0+py1)/2-10]], w:2.6, small:true });
-  // Wäldchen am Rand
   f.wood.push([[[-460,265+6],[xs[0]-6,265+6],[xs[0]-6,460],[-460,460]]]);
-  // Häuser entlang der Blockränder
   for (let i=0; i<xs.length-1; i++){
     for (let j=0; j<ys.length-1; j++){
       if (i===4 && j===0) continue; // Park
@@ -587,18 +632,16 @@ function demoFeatures(){
           const a = Math.min(end, p+wdt);
           const cx = e.ax + e.dx*(p+a)/2 + e.nx*dep/2, cy = e.ay + e.dy*(p+a)/2 + e.ny*dep/2;
           if (Math.abs(cy - riverY(cx)) > 28 + dep && rnd() > 0.08){
-            const q = [
+            f.buildings.push([[
               [e.ax+e.dx*p,           e.ay+e.dy*p],
               [e.ax+e.dx*a,           e.ay+e.dy*a],
               [e.ax+e.dx*a+e.nx*dep,  e.ay+e.dy*a+e.ny*dep],
               [e.ax+e.dx*p+e.nx*dep,  e.ay+e.dy*p+e.ny*dep]
-            ];
-            f.buildings.push([q]);
+            ]]);
           }
           p = a + (rnd() < 0.35 ? 3 + rnd()*5 : 0.5);
         }
       });
-      // Gartenmauer quer durch manche Höfe
       if (rnd() < 0.25) f.barriers.push({ pts:[[x0+22,(y0+y1)/2],[x1-22,(y0+y1)/2]], w:1 });
     }
   }
@@ -606,8 +649,9 @@ function demoFeatures(){
 }
 
 /* =====================================================================
-   3) RASTER: wo darf man laufen?
+   3) RASTER: wo darf man laufen, wo sieht man durch?
    base: 0 = blockiert (Haus, Wasser, Wand), 1 = Freifläche, 2 = Straße
+   opaque: 1 = Gebäude (blockiert Sicht und Schüsse)
    ===================================================================== */
 function makeCanvas(w, h){
   const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
@@ -627,12 +671,10 @@ function traceLine(c, pts){
 function rasterize(f, size){
   const W = Math.round(size/CELL), N = W*W;
   const toCells = c => c.setTransform(1/CELL, 0, 0, 1/CELL, W/2, W/2);
+  const layer = bg => { const c = makeCanvas(W, W).getContext('2d', { willReadFrequently:true }); c.fillStyle = bg; c.fillRect(0, 0, W, W); toCells(c); c.lineCap = 'round'; c.lineJoin = 'round'; return c; };
 
   // a) Hindernisse schwarz auf weiß, danach Straßen/Brücken wieder frei malen
-  const oc = makeCanvas(W, W), o = oc.getContext('2d', { willReadFrequently:true });
-  o.fillStyle = '#fff'; o.fillRect(0, 0, W, W);
-  toCells(o);
-  o.lineCap = 'round'; o.lineJoin = 'round';
+  const o = layer('#fff');
   o.fillStyle = '#000'; o.strokeStyle = '#000';
   f.water.forEach(p => { o.beginPath(); tracePoly(o, p); o.fill('evenodd'); });
   f.waterLines.forEach(l => { o.lineWidth = l.w; o.beginPath(); traceLine(o, l.pts); o.stroke(); });
@@ -644,20 +686,25 @@ function rasterize(f, size){
   const od = o.getImageData(0, 0, W, W).data;
 
   // b) Straßenmaske
-  const rc = makeCanvas(W, W), r = rc.getContext('2d', { willReadFrequently:true });
-  r.fillStyle = '#000'; r.fillRect(0, 0, W, W);
-  toCells(r);
-  r.lineCap = 'round'; r.lineJoin = 'round'; r.fillStyle = '#fff'; r.strokeStyle = '#fff';
+  const r = layer('#000');
+  r.fillStyle = '#fff'; r.strokeStyle = '#fff';
   f.roadAreas.forEach(p => { r.beginPath(); tracePoly(r, p); r.fill('evenodd'); });
   f.roads.forEach(x => { if (x.tunnel) return; r.lineWidth = x.w*0.85; r.beginPath(); traceLine(r, x.pts); r.stroke(); });
   const rd = r.getImageData(0, 0, W, W).data;
 
-  const base = new Uint8Array(N);
+  // c) Sichtmaske: nur Gebäude
+  const v = layer('#fff');
+  v.fillStyle = '#000';
+  f.buildings.forEach(p => { v.beginPath(); tracePoly(v, p); v.fill('evenodd'); });
+  const vd = v.getImageData(0, 0, W, W).data;
+
+  const base = new Uint8Array(N), opaque = new Uint8Array(N);
   for (let i=0; i<N; i++){
     if (od[i*4] < 140) base[i] = 0;
     else base[i] = rd[i*4] > 110 ? 2 : 1;
+    opaque[i] = vd[i*4] < 100 ? 1 : 0;
   }
-  return { W, base };
+  return { W, base, opaque };
 }
 
 // Größte zusammenhängende Lauffläche finden (nur dort entstehen Menschen)
@@ -743,13 +790,15 @@ function renderCache(f, size){
    5) SPIELZUSTAND
    ===================================================================== */
 let G = null;               // aktuelles Spiel
-let lastMap = null;         // { f, size, name } für Neustart
-let tool = 'outbreak', running = true, speedIdx = 0;
+let lastMap = null;         // { f, size, name, humans } für Neustart
+let tool = 'outbreak', lastBuild = 'wall', running = true, speedIdx = 0;
 const cam = { x:0, y:0, s:1, fit:1 };
 const DX = [1,-1,0,0,1,1,-1,-1], DY = [0,0,1,-1,1,-1,1,-1];
 
+function newHash(hw){ return { head:new Int32Array(hw*hw), next:new Int32Array(1024) }; }
+
 function newGame(f, size, name, humans){
-  const { W, base } = rasterize(f, size);
+  const { W, base, opaque } = rasterize(f, size);
   const N = W*W;
   const block = new Uint8Array(N);
   for (let i=0; i<N; i++) block[i] = base[i]===0 ? 1 : 0;
@@ -760,43 +809,29 @@ function newGame(f, size, name, humans){
     if (comp.label[i] !== comp.best) continue;
     (base[i]===2 ? roadCells : openCells).push(i);
   }
-  const g = {
-    f, size, half:size/2, name, W, N, base, block,
-    wallCount: new Uint8Array(N),
+  const hw = Math.ceil(size/4);
+  G = {
+    f, size, half:size/2, name, W, N, base, opaque, block,
+    wallCount: new Uint8Array(N), towerCount: new Uint8Array(N),
     roadCells: Int32Array.from(roadCells), openCells: Int32Array.from(openCells),
     distH: new Int16Array(N), distZ: new Int16Array(N), queue: new Int32Array(N),
-    agents: [], walls: [], corpses: [], fx: [], tracers: [],
-    time: 0, fieldT: 0, started: false, ended: false, kills: 0, maxZ: 0, humans0: 0,
-    hashSize: 4, hashW: Math.ceil(size/4), head: null, next: null,
+    agents: [], walls: [], towers: [], corpses: [], fx: [], tracers: [], bolts: [],
+    time: 0, fieldT: 0, started: false, ended: false, kills: 0, maxZ: 0, humans0: 0, _lastKills: -1,
+    hashSize: 4, hashW: hw, ph: newHash(hw), zh: newHash(hw),
     cache: renderCache(f, size)
   };
-  g.head = new Int32Array(g.hashW*g.hashW);
-  G = g;
   spawnHumans(humans);
-  return g;
+  return G;
 }
 
-function spawnHumans(n){
-  const g = G;
-  const total = g.roadCells.length + g.openCells.length;
-  n = Math.min(n, Math.floor(total/3));
-  for (let k=0; k<n; k++){
-    const useRoad = g.roadCells.length && (rand() < 0.78 || !g.openCells.length);
-    const arr = useRoad ? g.roadCells : g.openCells;
-    const i = arr[(rand()*arr.length)|0];
-    const [x, y] = cellCenter(i);
-    const a = { t:H, x: x+(rand()-0.5)*CELL*0.8, y: y+(rand()-0.5)*CELL*0.8, h: rand()*TAU, turn: rand()*3, idle: rand()<0.2 ? rand()*6 : 0, alive:true };
-    g.agents.push(a);
-  }
-  g.humans0 = n;
-}
+function refreshBlock(i){ G.block[i] = (G.base[i]===0 || G.wallCount[i] || G.towerCount[i]) ? 1 : 0; }
 
 function resetGame(){
   if (!lastMap) return;
-  G.agents = []; G.corpses = []; G.fx = []; G.tracers = [];
-  G.walls = []; G.wallCount.fill(0);
+  G.agents = []; G.corpses = []; G.fx = []; G.tracers = []; G.bolts = [];
+  G.walls = []; G.towers = []; G.wallCount.fill(0); G.towerCount.fill(0);
   for (let i=0; i<G.N; i++) G.block[i] = G.base[i]===0 ? 1 : 0;
-  G.time = 0; G.fieldT = 0; G.started = false; G.ended = false; G.kills = 0; G.maxZ = 0;
+  G.time = 0; G.fieldT = 0; G.started = false; G.ended = false; G.kills = 0; G.maxZ = 0; G._lastKills = -1;
   spawnHumans(lastMap.humans);
   setTool('outbreak');
   running = true; syncPlay();
@@ -830,8 +865,215 @@ function nearestFree(x, y, maxR = 15){
   return -1;
 }
 
+// Zellen im Umkreis (für Turm-Grundfläche)
+function cellsAround(x, y, r){
+  const out = [], W = G.W, rc = Math.ceil(r/CELL)+1;
+  const cx = Math.floor((x + G.half)/CELL), cy = Math.floor((y + G.half)/CELL);
+  for (let dy=-rc; dy<=rc; dy++) for (let dx=-rc; dx<=rc; dx++){
+    const ix = cx+dx, iy = cy+dy;
+    if (ix < 0 || iy < 0 || ix >= W || iy >= W) continue;
+    const mx = (ix+0.5)*CELL - G.half, my = (iy+0.5)*CELL - G.half;
+    if (Math.hypot(mx-x, my-y) <= r) out.push(iy*W+ix);
+  }
+  return out;
+}
+
 /* =====================================================================
-   6) WEGFELDER (Breitensuche über das Raster)
+   6) RUDEL: Menschen ziehen in Gruppen
+   Jede Gruppe hat einen Anführer, der eine Spur hinterlässt. Die anderen
+   laufen diese Spur nach, halten Abstand und rücken nebeneinander auf.
+   Sieht ein Mitglied Zombies, gerät die ganze Gruppe in Panik.
+   ===================================================================== */
+function newHuman(x, y){
+  return { t:H, x, y, h:rand()*TAU, turn:rand()*3, idle: rand()<0.25 ? rand()*8 : 0, alive:true,
+           g:null, rank:0, tc:0, joinT:rand()*2, stuck:0, px:x, py:y };
+}
+function makeGroup(leader){
+  const g = { leader, members:[leader], trail:[[leader.x, leader.y]], base:0, panic:0 };
+  leader.g = g; leader.rank = 0; leader.tc = 0; leader.stuck = 0;
+  return g;
+}
+function joinGroup(a, g){
+  a.g = g; g.members.push(a); a.rank = g.members.length-1;
+  a.tc = g.base + g.trail.length - 1; a.stuck = 0; a.idle = 0;
+}
+function removeFromGroup(a){
+  const g = a.g; if (!g) return;
+  a.g = null;
+  const k = g.members.indexOf(a); if (k >= 0) g.members.splice(k, 1);
+  if (!g.members.length) return;
+  if (g.leader === a){
+    // das Mitglied, das dem alten Anführer am nächsten war, übernimmt
+    let best = g.members[0], bd = 1e9;
+    for (const m of g.members){ const d = (m.x-a.x)**2 + (m.y-a.y)**2; if (d < bd){ bd = d; best = m; } }
+    g.members.splice(g.members.indexOf(best), 1); g.members.unshift(best);
+    g.leader = best; g.trail = [[best.x, best.y]]; g.base = 0;
+    g.members.forEach(m => { m.tc = 0; m.stuck = 0; });
+  }
+  g.members.forEach((m, i) => m.rank = i);
+}
+function leaveGroup(a){ removeFromGroup(a); makeGroup(a); }
+
+function spawnHumans(n){
+  const g = G;
+  const total = g.roadCells.length + g.openCells.length;
+  n = Math.min(n, Math.floor(total/3));
+  let made = 0;
+  while (made < n){
+    const size = Math.min(n - made, rand() < 0.18 ? 1 : 2 + Math.floor(rand()*6));
+    const useRoad = g.roadCells.length && (rand() < 0.8 || !g.openCells.length);
+    const arr = useRoad ? g.roadCells : g.openCells;
+    const [cx, cy] = cellCenter(arr[(rand()*arr.length)|0]);
+    const leader = newHuman(cx + (rand()-0.5)*1.5, cy + (rand()-0.5)*1.5);
+    g.agents.push(leader);
+    const grp = makeGroup(leader);
+    for (let k=1; k<size; k++){
+      let x = cx, y = cy;
+      for (let t=0; t<10; t++){
+        const nx = cx + (rand()-0.5)*6, ny = cy + (rand()-0.5)*6;
+        if (free(nx, ny)){ x = nx; y = ny; break; }
+      }
+      const m = newHuman(x, y);
+      g.agents.push(m);
+      joinGroup(m, grp);
+      m.tc = 0;
+    }
+    made += size;
+  }
+  g.humans0 = n;
+}
+
+function recordTrail(a){
+  const g = a.g, tr = g.trail, l = tr[tr.length-1];
+  if (Math.hypot(a.x - l[0], a.y - l[1]) >= TRAIL_STEP){
+    tr.push([a.x, a.y]);
+    if (tr.length > TRAIL_MAX){ tr.shift(); g.base++; }
+  }
+}
+
+function fleeStep(a, i, dt, speed){
+  if (i < 0) return false;
+  const j = bestNeighbor(G.distZ, i, true);
+  if (j >= 0 && G.distZ[j] > G.distZ[i]){
+    const [tx, ty] = cellCenter(j);
+    steerTo(a, tx + (rand()-0.5)*0.6, ty + (rand()-0.5)*0.6, speed, dt);
+    a.idle = 0;
+    return true;
+  }
+  return false;
+}
+
+function updHuman(a, dt){
+  const i = cellIndex(a.x, a.y);
+  const dz = (i >= 0 && G.started) ? G.distZ[i] : INF;
+  const g = a.g;
+  a.joinT -= dt;
+  if (dz < HUMAN_FEAR) g.panic = PANIC_TIME;
+  if (dz < FEAR_SELF && fleeStep(a, i, dt, HUMAN_SPEED)){
+    // Akute Gefahr: jeder rennt für sich. Danach zur Gruppe zurück.
+    if (a === g.leader) recordTrail(a);
+    else { a.tc = g.base + g.trail.length - 1; a.stuck = 0; }
+    a.px = a.x; a.py = a.y;
+    return;
+  }
+  if (a === g.leader){
+    updLeader(a, dt, i, dz);
+    if (a.g.leader === a) recordTrail(a);     // nach einem Zusammenschluss ist a evtl. kein Anführer mehr
+  }
+  else updFollower(a, dt);
+}
+
+function updLeader(a, dt, i, dz){
+  const g = a.g;
+  if (g.panic > 0){
+    g.panic -= dt; a.idle = 0;
+    if (dz < LEADER_SIGHT && fleeStep(a, i, dt, HUMAN_SPEED)) return;
+    wander(a, HUMAN_SPEED, dt, true);
+    return;
+  }
+  if (a.idle > 0){ a.idle -= dt; return; }
+  if (rand() < dt*0.008) a.idle = 3 + rand()*10;     // Gruppe bleibt mal stehen
+  // auf Nachzügler warten
+  let speed = HUMAN_SPEED;
+  if (g.members.length > 1){
+    const lastAbs = g.base + g.trail.length - 1;
+    let lag = 0;
+    for (const m of g.members) if (m !== a) lag = Math.max(lag, lastAbs - m.tc);
+    if (lag > 22) speed = 0; else if (lag > 12) speed *= 0.5;
+  }
+  if (speed > 0) wander(a, speed, dt, true);
+  // kleine Gruppen und Einzelgänger schließen sich größeren an
+  if (a.joinT <= 0){ a.joinT = 1 + rand()*1.5; tryMerge(a); }
+}
+
+function tryMerge(a){
+  const g = a.g;
+  if (g.members.length > 5) return;
+  let best = null, bd = 36;
+  forEachIn(G.ph, a.x, a.y, 6, p => {
+    if (p.t !== H || !p.g || p.g === g) return;
+    const og = p.g;
+    if (og.members.length < g.members.length || og.members.length + g.members.length > GROUP_MAX) return;
+    const d = (p.x-a.x)**2 + (p.y-a.y)**2;
+    if (d < bd){ bd = d; best = og; }
+  });
+  if (!best) return;
+  const ms = g.members.slice();
+  ms.forEach(m => { m.g = null; });
+  ms.forEach(m => joinGroup(m, best));
+}
+
+function updFollower(a, dt){
+  const g = a.g, tr = g.trail, L = g.leader;
+  const lastAbs = g.base + tr.length - 1;
+  if (a.tc < g.base) a.tc = g.base;
+  const k = 1 + Math.floor(a.rank*0.6);
+  const want = Math.max(g.base, lastAbs - k);
+  // entlang der Spur vorrücken
+  let idx = Math.min(a.tc, want);
+  let p = tr[idx - g.base];
+  let d = Math.hypot(p[0]-a.x, p[1]-a.y);
+  while (idx < want && d < 1.6){ idx++; p = tr[idx - g.base]; d = Math.hypot(p[0]-a.x, p[1]-a.y); }
+  if (idx > a.tc) a.tc = idx;
+  let tx = p[0], ty = p[1];
+  const inForm = idx >= want;
+  if (inForm){
+    // nebeneinander statt hintereinander: links, Mitte, rechts
+    const off = ((a.rank % 3) - 1) * 1.5;
+    const ox = -Math.sin(L.h)*off, oy = Math.cos(L.h)*off;
+    if (off && free(tx+ox, ty+oy)){ tx += ox; ty += oy; }
+    d = Math.hypot(tx-a.x, ty-a.y);
+  }
+  let speed;
+  if (!inForm || d > 3 || g.panic > 0) speed = HUMAN_SPEED*1.15;   // aufschließen
+  else if (d > 1) speed = HUMAN_SPEED*0.85;
+  else speed = 0;
+  if (g.panic > 0 && d < 1) speed = HUMAN_SPEED;
+  // Abstand zu Nachbarn
+  let sx = 0, sy = 0;
+  forEachIn(G.ph, a.x, a.y, 1.3, q => {
+    if (q === a) return;
+    const ex = a.x - q.x, ey = a.y - q.y, dd = Math.hypot(ex, ey) || 0.01;
+    if (dd < 1.3){ sx += ex/dd*(1.3-dd); sy += ey/dd*(1.3-dd); }
+  });
+  let mx = sx*dt*1.5, my = sy*dt*1.5;
+  if (speed > 0 && d > 0.05){
+    const st = Math.min(d, speed*dt);
+    mx += (tx-a.x)/d*st; my += (ty-a.y)/d*st;
+    a.h = Math.atan2(ty-a.y, tx-a.x);
+  }
+  if (mx || my) moveBy(a, mx, my);
+  // hängen geblieben oder abgehängt? Dann eigene Wege gehen.
+  if (speed > 0){
+    const moved = Math.hypot(a.x-a.px, a.y-a.py);
+    a.stuck = moved < speed*dt*0.25 ? a.stuck + dt : Math.max(0, a.stuck - dt);
+  }
+  a.px = a.x; a.py = a.y;
+  if (a.stuck > 5 || d > 35) leaveGroup(a);
+}
+
+/* =====================================================================
+   7) WEGFELDER (Breitensuche über das Raster)
    distH: Laufweg-Abstand zum nächsten Menschen/Soldaten (für Zombies)
    distZ: Laufweg-Abstand zum nächsten Zombie (für fliehende Menschen)
    ===================================================================== */
@@ -863,7 +1105,7 @@ function bfs(dist, type, cutoff){
 
 function updateFields(){
   bfs(G.distH, H, ZOMBIE_SENSE + 2);
-  bfs(G.distZ, Z, HUMAN_FEAR + 2);
+  bfs(G.distZ, Z, LEADER_SIGHT + 1);
 }
 
 // Nachbarzelle mit bestem Feldwert (min für Jagd, max für Flucht)
@@ -884,7 +1126,7 @@ function bestNeighbor(dist, i, wantMax){
 }
 
 /* =====================================================================
-   7) BEWEGUNG
+   8) BEWEGUNG & KAMPF
    ===================================================================== */
 function moveBy(a, dx, dy){
   // Steht der Agent in einer gerade gebauten Mauer, darf er sich herausbewegen
@@ -913,8 +1155,7 @@ function pickHeading(a, roadPref){
     const cx = Math.cos(h), cy = Math.sin(h);
     if (!free(a.x + cx*2.5, a.y + cy*2.5)) continue;
     let sc = rand()*1.1 + Math.cos(h - a.h)*0.9;
-    const fx = a.x + cx*9, fy = a.y + cy*9;
-    const j = cellIndex(fx, fy);
+    const j = cellIndex(a.x + cx*9, a.y + cy*9);
     if (j < 0 || G.block[j]) sc -= 1.2;
     else if (roadPref && G.base[j] === 2) sc += 1.6;
     if (sc > best){ best = sc; bestH = h; }
@@ -931,28 +1172,23 @@ function wander(a, speed, dt, roadPref){
   if (!ok) pickHeading(a, roadPref);
 }
 
-function updHuman(a, dt){
-  const i = cellIndex(a.x, a.y);
-  if (i >= 0 && G.started && G.distZ[i] < HUMAN_FEAR){
-    a.idle = 0;
-    const j = bestNeighbor(G.distZ, i, true);
-    if (j >= 0 && G.distZ[j] > G.distZ[i]){
-      const [tx, ty] = cellCenter(j);
-      steerTo(a, tx + (rand()-0.5)*0.6, ty + (rand()-0.5)*0.6, HUMAN_SPEED, dt);
-      a.turn = 0.5;
-      return;
-    }
+function hurt(z, dmg, kind){
+  if (!z.alive || z.t !== Z) return;
+  z.hp -= dmg;
+  if (z.hp <= 0){
+    z.alive = false; G.kills++;
+    G.corpses.push({ x:z.x, y:z.y, ash: kind === 'flame' });
+    if (G.corpses.length > 800) G.corpses.shift();
   }
-  if (a.idle > 0){ a.idle -= dt; return; }
-  if (rand() < dt*0.012) a.idle = 2 + rand()*8;      // ab und zu stehen bleiben
-  wander(a, HUMAN_SPEED, dt, true);
 }
 
 function updZombie(a, dt){
+  if (a.burn > 0){ a.burn -= dt; hurt(a, BURN_DPS*dt, 'flame'); if (!a.alive) return; }
+  if (a.stun > 0){ a.stun -= dt; return; }
   const i = cellIndex(a.x, a.y);
   const d = i >= 0 ? G.distH[i] : INF;
   if (d <= 3){
-    const p = nearestPrey(a.x, a.y, 9);
+    const p = nearestIn(G.ph, a.x, a.y, 9, null);
     if (p){ steerTo(a, p.x, p.y, ZOMBIE_SPEED, dt); return; }
   }
   if (d < ZOMBIE_SENSE){
@@ -966,108 +1202,140 @@ function updZombie(a, dt){
   wander(a, ZOMBIE_SPEED, dt, false);
 }
 
-function updSoldier(a, dt, zombies){
-  a.cd -= dt;
-  if (a.cd > 0) return;
-  let best = null, bd = SOLDIER_RANGE*SOLDIER_RANGE;
-  for (const z of zombies){
-    if (!z.alive) continue;
-    const dx = z.x - a.x, dy = z.y - a.y, d2 = dx*dx + dy*dy;
-    if (d2 < bd && lineOfSight(a.x, a.y, z.x, z.y)){ bd = d2; best = z; }
-  }
-  if (!best){ a.cd = 0.25; return; }
-  a.cd = SOLDIER_COOLDOWN;
-  a.h = Math.atan2(best.y - a.y, best.x - a.x);
-  const hit = rand() < SOLDIER_HIT;
-  G.tracers.push({ x0:a.x, y0:a.y, x1:best.x, y1:best.y, t:performance.now(), hit });
-  if (hit){
-    best.alive = false; G.kills++;
-    G.corpses.push({ x:best.x, y:best.y });
-    if (G.corpses.length > 600) G.corpses.shift();
-  }
-}
-
-function lineOfSight(x0, y0, x1, y1){
+// Sichtlinie: Gebäude blockieren immer, Mauern nur für Soldaten am Boden
+function los(x0, y0, x1, y1, overWalls){
   const d = Math.hypot(x1-x0, y1-y0), n = Math.ceil(d/(CELL*0.5));
   for (let k=1; k<n; k++){
     const t = k/n;
     const i = cellIndex(x0 + (x1-x0)*t, y0 + (y1-y0)*t);
-    if (i < 0 || (G.base[i] === 0 || G.wallCount[i])) return false;
+    if (i < 0 || G.opaque[i]) return false;
+    if (!overWalls && G.wallCount[i]) return false;
   }
   return true;
 }
 
-// Räumliches Gitter für Beute (Menschen + Soldaten)
-function buildPreyHash(){
+function updSoldier(a, dt){
+  a.cd -= dt;
+  if (a.cd > 0) return;
+  const best = nearestIn(G.zh, a.x, a.y, SOLDIER_RANGE, z => los(a.x, a.y, z.x, z.y, false));
+  if (!best){ a.cd = 0.25; return; }
+  a.cd = SOLDIER_COOLDOWN;
+  a.h = Math.atan2(best.y - a.y, best.x - a.x);
+  const hit = rand() < SOLDIER_HIT;
+  G.tracers.push({ x0:a.x, y0:a.y, x1:best.x, y1:best.y, t:performance.now() });
+  if (hit) hurt(best, SOLDIER_DMG, 'shot');
+}
+
+// Flammenwerfer: dreht sich zum Ziel und verbrennt alles im Kegel
+function updFlame(t, dt){
+  t.retarget -= dt;
+  const tg = t.target;
+  if (t.retarget <= 0 || !tg || !tg.alive || tg.t !== Z || (tg.x-t.x)**2 + (tg.y-t.y)**2 > FLAME_RANGE*FLAME_RANGE){
+    t.retarget = 0.3;
+    t.target = nearestIn(G.zh, t.x, t.y, FLAME_RANGE, z => los(t.x, t.y, z.x, z.y, true));
+  }
+  if (!t.target){ t.firing = false; return; }
+  const want = Math.atan2(t.target.y - t.y, t.target.x - t.x);
+  const diff = angDiff(want, t.h), mt = FLAME_TURN*dt;
+  t.h += Math.max(-mt, Math.min(mt, diff));
+  t.firing = Math.abs(angDiff(want, t.h)) < FLAME_HALF;
+  if (!t.firing) return;
+  forEachIn(G.zh, t.x, t.y, FLAME_RANGE, z => {
+    if (!z.alive || z.t !== Z) return;
+    const dx = z.x - t.x, dy = z.y - t.y, d = Math.hypot(dx, dy);
+    if (d > FLAME_RANGE) return;
+    if (d > 2.5 && Math.abs(angDiff(Math.atan2(dy, dx), t.h)) > FLAME_HALF) return;
+    if (!los(t.x, t.y, z.x, z.y, true)) return;
+    z.burn = BURN_TIME;
+    hurt(z, FLAME_DPS*dt, 'flame');
+  });
+}
+
+// Tesla: Kettenblitz, springt von Zombie zu Zombie und betäubt
+function updTesla(t, dt){
+  t.cd -= dt;
+  if (t.cd > 0) return;
+  const first = nearestIn(G.zh, t.x, t.y, TESLA_RANGE, z => los(t.x, t.y, z.x, z.y, true));
+  if (!first){ t.cd = 0.25; return; }
+  const hits = [first];
+  let cur = first;
+  while (hits.length < TESLA_CHAIN){
+    const c = cur;
+    const nx = nearestIn(G.zh, c.x, c.y, TESLA_JUMP, z => !hits.includes(z) && los(c.x, c.y, z.x, z.y, true));
+    if (!nx) break;
+    hits.push(nx); cur = nx;
+  }
+  const pts = [[t.x, t.y]];
+  let dmg = TESLA_DMG;
+  for (const z of hits){ pts.push([z.x, z.y]); z.stun = TESLA_STUN; hurt(z, dmg, 'tesla'); dmg *= TESLA_FALLOFF; }
+  const now = performance.now();
+  G.bolts.push({ pts, t:now });
+  t.cd = TESLA_COOLDOWN; t.flash = now;
+}
+
+// Räumliche Gitter: ph = Beute (Menschen + Soldaten), zh = Zombies
+function buildHash(hh, test){
   const g = G, hs = g.hashSize, hw = g.hashW;
-  if (!g.next || g.next.length < g.agents.length) g.next = new Int32Array(Math.max(1024, g.agents.length*2));
-  g.head.fill(-1);
+  if (hh.next.length < g.agents.length) hh.next = new Int32Array(g.agents.length*2);
+  hh.head.fill(-1);
   for (let k=0; k<g.agents.length; k++){
     const a = g.agents[k];
-    if (!a.alive || a.t === Z) continue;
+    if (!a.alive || !test(a)) continue;
     const bx = Math.min(hw-1, Math.max(0, Math.floor((a.x + g.half)/hs)));
     const by = Math.min(hw-1, Math.max(0, Math.floor((a.y + g.half)/hs)));
     const b = by*hw + bx;
-    g.next[k] = g.head[b]; g.head[b] = k;
+    hh.next[k] = hh.head[b]; hh.head[b] = k;
   }
 }
-
-function nearestPrey(x, y, maxD){
+function forEachIn(hh, x, y, r, fn){
   const g = G, hs = g.hashSize, hw = g.hashW;
-  const r = Math.ceil(maxD/hs);
-  const bx = Math.floor((x + g.half)/hs), by = Math.floor((y + g.half)/hs);
-  let best = null, bd = maxD*maxD;
-  for (let yy=by-r; yy<=by+r; yy++){
-    if (yy < 0 || yy >= hw) continue;
-    for (let xx=bx-r; xx<=bx+r; xx++){
-      if (xx < 0 || xx >= hw) continue;
-      for (let k = g.head[yy*hw+xx]; k !== -1; k = g.next[k]){
-        const p = g.agents[k];
-        if (!p.alive || p.t === Z) continue;
-        const dx = p.x - x, dy = p.y - y, d2 = dx*dx + dy*dy;
-        if (d2 < bd){ bd = d2; best = p; }
-      }
-    }
+  const x0 = Math.max(0, Math.floor((x - r + g.half)/hs)), x1 = Math.min(hw-1, Math.floor((x + r + g.half)/hs));
+  const y0 = Math.max(0, Math.floor((y - r + g.half)/hs)), y1 = Math.min(hw-1, Math.floor((y + r + g.half)/hs));
+  for (let yy=y0; yy<=y1; yy++) for (let xx=x0; xx<=x1; xx++){
+    for (let k = hh.head[yy*hw+xx]; k !== -1; k = hh.next[k]) fn(g.agents[k]);
   }
+}
+// nächster passender Agent; Beute-Gitter liefert nur Menschen/Soldaten, Zombie-Gitter nur Zombies
+function nearestIn(hh, x, y, maxD, pred){
+  let best = null, bd = maxD*maxD;
+  const wantZ = hh === G.zh;
+  forEachIn(hh, x, y, maxD, p => {
+    if (!p.alive || (p.t === Z) !== wantZ) return;
+    const d2 = (p.x-x)**2 + (p.y-y)**2;
+    if (d2 < bd && (!pred || pred(p))){ bd = d2; best = p; }
+  });
   return best;
 }
 
-function bites(zombies){
-  const g = G, hs = g.hashSize, hw = g.hashW, b2 = BITE_DIST*BITE_DIST;
-  const now = performance.now();
-  for (const z of zombies){
-    if (!z.alive) continue;
-    const bx = Math.floor((z.x + g.half)/hs), by = Math.floor((z.y + g.half)/hs);
-    for (let yy=by-1; yy<=by+1; yy++){
-      if (yy < 0 || yy >= hw) continue;
-      for (let xx=bx-1; xx<=bx+1; xx++){
-        if (xx < 0 || xx >= hw) continue;
-        for (let k = g.head[yy*hw+xx]; k !== -1; k = g.next[k]){
-          const p = g.agents[k];
-          if (!p.alive || p.t === Z) continue;
-          const dx = p.x - z.x, dy = p.y - z.y;
-          if (dx*dx + dy*dy < b2){
-            p.t = Z; p.h = rand()*TAU; p.turn = 0; p.idle = 0;
-            g.fx.push({ x:p.x, y:p.y, t:now });
-          }
-        }
+function bites(){
+  const b2 = BITE_DIST*BITE_DIST, now = performance.now();
+  for (const z of G.agents){
+    if (!z.alive || z.t !== Z || z.stun > 0) continue;
+    forEachIn(G.ph, z.x, z.y, BITE_DIST, p => {
+      if (!p.alive || p.t === Z) return;
+      const dx = p.x - z.x, dy = p.y - z.y;
+      if (dx*dx + dy*dy < b2){
+        if (p.t === H) removeFromGroup(p);
+        p.t = Z; p.hp = ZOMBIE_HP; p.burn = 0; p.stun = 0;
+        p.h = rand()*TAU; p.turn = 0; p.idle = 0;
+        G.fx.push({ x:p.x, y:p.y, t:now });
       }
-    }
+    });
   }
 }
 
 function step(dt){
   const g = G;
-  const zombies = [];
-  for (const a of g.agents) if (a.alive && a.t === Z) zombies.push(a);
-  buildPreyHash();
+  buildHash(g.ph, a => a.t !== Z);
+  buildHash(g.zh, a => a.t === Z);
   for (const a of g.agents){
     if (!a.alive) continue;
     if (a.t === H) updHuman(a, dt);
     else if (a.t === Z) updZombie(a, dt);
-    else updSoldier(a, dt, zombies);
+    else updSoldier(a, dt);
   }
-  bites(zombies);
+  for (const t of g.towers){ if (t.type === 'flame') updFlame(t, dt); else updTesla(t, dt); }
+  bites();
   if (g.kills !== g._lastKills){
     g.agents = g.agents.filter(a => a.alive);
     g._lastKills = g.kills;
@@ -1075,7 +1343,7 @@ function step(dt){
 }
 
 /* =====================================================================
-   8) BAUEN: Ausbruch, Mauern, Soldaten, Abriss
+   9) BAUEN: Ausbruch, Mauern, Soldaten, Türme, Abriss
    ===================================================================== */
 function placeOutbreak(wx, wy){
   const i = nearestFree(wx, wy);
@@ -1088,13 +1356,13 @@ function placeOutbreak(wx, wy){
       const nx = cx + (rand()-0.5)*5, ny = cy + (rand()-0.5)*5;
       if (free(nx, ny)){ x = nx; y = ny; break; }
     }
-    G.agents.push({ t:Z, x, y, h:rand()*TAU, turn:0, idle:0, alive:true });
+    G.agents.push({ t:Z, x, y, h:rand()*TAU, turn:0, idle:0, alive:true, hp:ZOMBIE_HP, burn:0, stun:0 });
   }
   G.fx.push({ x:cx, y:cy, t:now, big:true });
   G.started = true; G.ended = false;
   G.fieldT = 0;
   setTool('pan');
-  flashHint('Ausbruch! Baue Mauern und postiere Soldaten.');
+  flashHint('Ausbruch! Unter „Bauen“ findest du Mauern, Soldaten und Türme.');
 }
 
 function placeSoldier(wx, wy){
@@ -1105,26 +1373,33 @@ function placeSoldier(wx, wy){
   G.fieldT = 0;
 }
 
+function placeTower(type, wx, wy){
+  const i = nearestFree(wx, wy, 6);
+  if (i < 0){ flashHint('Türme brauchen freien Boden.'); return; }
+  const [cx, cy] = cellCenter(i);
+  for (const t of G.towers) if (Math.hypot(t.x-cx, t.y-cy) < TOWER_R*2.2){ flashHint('Hier steht schon ein Turm.'); return; }
+  const cells = cellsAround(cx, cy, TOWER_R);
+  cells.forEach(c => { G.towerCount[c]++; G.block[c] = 1; });
+  G.towers.push({ type, x:cx, y:cy, cells, h:-Math.PI/2, cd:0, retarget:0, target:null, firing:false, flash:0 });
+  G.fieldT = 0;
+}
+
+function removeTower(t){
+  t.cells.forEach(c => { G.towerCount[c]--; refreshBlock(c); });
+  G.towers.splice(G.towers.indexOf(t), 1);
+  G.fieldT = 0;
+}
+
 function addWall(pts){
   if (pts.length < 2) return;
   let len = 0;
   for (let k=1; k<pts.length; k++) len += Math.hypot(pts[k][0]-pts[k-1][0], pts[k][1]-pts[k-1][1]);
   if (len < 3) return;
   const set = new Set();
-  const W = G.W, rc = Math.ceil(WALL_THICK/CELL)+1;
   for (let k=1; k<pts.length; k++){
     const [x0, y0] = pts[k-1], [x1, y1] = pts[k];
     const n = Math.max(1, Math.ceil(Math.hypot(x1-x0, y1-y0)/0.5));
-    for (let s=0; s<=n; s++){
-      const x = x0 + (x1-x0)*s/n, y = y0 + (y1-y0)*s/n;
-      const cx = Math.floor((x + G.half)/CELL), cy = Math.floor((y + G.half)/CELL);
-      for (let dy=-rc; dy<=rc; dy++) for (let dx=-rc; dx<=rc; dx++){
-        const ix = cx+dx, iy = cy+dy;
-        if (ix < 0 || iy < 0 || ix >= W || iy >= W) continue;
-        const mx = (ix+0.5)*CELL - G.half, my = (iy+0.5)*CELL - G.half;
-        if (Math.hypot(mx-x, my-y) <= WALL_THICK) set.add(iy*W+ix);
-      }
-    }
+    for (let s=0; s<=n; s++) cellsAround(x0 + (x1-x0)*s/n, y0 + (y1-y0)*s/n, WALL_THICK).forEach(c => set.add(c));
   }
   const cells = Int32Array.from(set);
   cells.forEach(i => { G.wallCount[i]++; G.block[i] = 1; });
@@ -1133,20 +1408,25 @@ function addWall(pts){
 }
 
 function removeWall(w){
-  w.cells.forEach(i => { G.wallCount[i]--; if (!G.wallCount[i] && G.base[i] !== 0) G.block[i] = 0; });
+  w.cells.forEach(i => { G.wallCount[i]--; refreshBlock(i); });
   G.walls.splice(G.walls.indexOf(w), 1);
   G.fieldT = 0;
 }
 
 function eraseAt(wx, wy){
   const reach = Math.max(5, 22/cam.s);
-  let bestS = null, bs = reach*reach;
+  let best = null, bd = reach*reach, kind = '';
   for (const a of G.agents){
     if (!a.alive || a.t !== S) continue;
     const d2 = (a.x-wx)**2 + (a.y-wy)**2;
-    if (d2 < bs){ bs = d2; bestS = a; }
+    if (d2 < bd){ bd = d2; best = a; kind = 'soldier'; }
   }
-  if (bestS){ bestS.alive = false; G.agents = G.agents.filter(a => a.alive); G.fieldT = 0; return; }
+  for (const t of G.towers){
+    const d2 = (t.x-wx)**2 + (t.y-wy)**2;
+    if (d2 < bd){ bd = d2; best = t; kind = 'tower'; }
+  }
+  if (kind === 'soldier'){ best.alive = false; G.agents = G.agents.filter(a => a.alive); G.fieldT = 0; return; }
+  if (kind === 'tower'){ removeTower(best); return; }
   let bestW = null, bw = reach;
   for (const w of G.walls){
     for (let k=1; k<w.pts.length; k++){
@@ -1155,7 +1435,7 @@ function eraseAt(wx, wy){
     }
   }
   if (bestW) removeWall(bestW);
-  else flashHint('Hier ist keine Mauer und kein Soldat.');
+  else flashHint('Hier ist nichts zum Abreißen.');
 }
 
 function segDist(px, py, a, b){
@@ -1165,10 +1445,27 @@ function segDist(px, py, a, b){
 }
 
 /* =====================================================================
-   9) ZEICHNEN
+   10) ZEICHNEN
    ===================================================================== */
+function circles(list, rad){
+  ctx.beginPath();
+  for (const a of list){ ctx.moveTo(a.x + rad, a.y); ctx.arc(a.x, a.y, rad, 0, TAU); }
+}
+
+// gezackter Blitz zwischen zwei Punkten
+function boltPath(x0, y0, x1, y1, jag){
+  const n = 6, nx = -(y1-y0), ny = x1-x0, l = Math.hypot(nx, ny) || 1;
+  ctx.moveTo(x0, y0);
+  for (let k=1; k<n; k++){
+    const t = k/n, o = (rand()-0.5)*jag;
+    ctx.lineTo(x0 + (x1-x0)*t + nx/l*o, y0 + (y1-y0)*t + ny/l*o);
+  }
+  ctx.lineTo(x1, y1);
+}
+
 function render(now){
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = COL.void; ctx.fillRect(0, 0, VW, VH);
   if (!G) return;
   const s = cam.s;
@@ -1179,13 +1476,13 @@ function render(now){
   ctx.strokeRect(-G.half, -G.half, G.size, G.size);
 
   // sichtbarer Ausschnitt in Metern (zum Aussortieren)
-  const vx0 = -cam.x/s - 10, vy0 = -cam.y/s - 10, vx1 = (VW-cam.x)/s + 10, vy1 = (VH-cam.y)/s + 10;
+  const vx0 = -cam.x/s - 30, vy0 = -cam.y/s - 30, vx1 = (VW-cam.x)/s + 30, vy1 = (VH-cam.y)/s + 30;
   const vis = a => a.x > vx0 && a.x < vx1 && a.y > vy0 && a.y < vy1;
   const r = Math.max(0.8, 2.1/s);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
   // Mauern
   if (G.walls.length || wallDraft){
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     const ww = Math.max(WALL_THICK*2, 3.5/s);
     ctx.strokeStyle = COL.wallEdge; ctx.lineWidth = ww + 1.6/s;
     ctx.beginPath(); G.walls.forEach(w => traceLine(ctx, w.pts)); ctx.stroke();
@@ -1193,7 +1490,6 @@ function render(now){
     ctx.beginPath(); G.walls.forEach(w => traceLine(ctx, w.pts)); ctx.stroke();
     if (wallDraft && wallDraft.length > 1){
       ctx.setLineDash([3, 2]); ctx.globalAlpha = 0.75;
-      ctx.strokeStyle = COL.wall; ctx.lineWidth = ww;
       ctx.beginPath(); traceLine(ctx, wallDraft); ctx.stroke();
       ctx.setLineDash([]); ctx.globalAlpha = 1;
     }
@@ -1201,46 +1497,96 @@ function render(now){
 
   // Erledigte Zombies
   if (G.corpses.length){
-    ctx.fillStyle = COL.corpse; ctx.beginPath();
     const cr = r*0.8;
-    for (const c of G.corpses){ ctx.moveTo(c.x + cr, c.y); ctx.arc(c.x, c.y, cr, 0, TAU); }
-    ctx.fill();
+    ctx.fillStyle = COL.corpse; circles(G.corpses.filter(c => !c.ash), cr); ctx.fill();
+    ctx.fillStyle = COL.ash; circles(G.corpses.filter(c => c.ash), cr); ctx.fill();
   }
 
   const hs = [], zs = [], ss = [];
   for (const a of G.agents){ if (!a.alive || !vis(a)) continue; (a.t === H ? hs : a.t === Z ? zs : ss).push(a); }
+  const towers = G.towers.filter(vis);
 
-  // Reichweite der Soldaten beim Bauen
-  if ((tool === 'soldier' || tool === 'erase') && ss.length){
-    ctx.strokeStyle = 'rgba(255,180,58,0.28)'; ctx.fillStyle = 'rgba(255,180,58,0.05)'; ctx.lineWidth = 1/s;
-    ctx.beginPath(); ss.forEach(a => { ctx.moveTo(a.x + SOLDIER_RANGE, a.y); ctx.arc(a.x, a.y, SOLDIER_RANGE, 0, TAU); }); ctx.fill(); ctx.stroke();
+  // Reichweiten beim Bauen
+  if (BUILD.has(tool) || tool === 'erase'){
+    ctx.lineWidth = 1/s;
+    const ring = (list, rad, stroke, fill) => {
+      if (!list.length) return;
+      ctx.strokeStyle = stroke; ctx.fillStyle = fill; circles(list, rad); ctx.fill(); ctx.stroke();
+    };
+    ring(ss, SOLDIER_RANGE, 'rgba(255,180,58,0.28)', 'rgba(255,180,58,0.04)');
+    ring(towers.filter(t => t.type === 'flame'), FLAME_RANGE, 'rgba(255,122,46,0.4)', 'rgba(255,122,46,0.05)');
+    ring(towers.filter(t => t.type === 'tesla'), TESLA_RANGE, 'rgba(111,227,255,0.35)', 'rgba(111,227,255,0.04)');
   }
 
-  // Zombie-Schein
-  ctx.fillStyle = COL.zombieGlow; ctx.beginPath();
-  for (const a of zs){ ctx.moveTo(a.x + r*2.6, a.y); ctx.arc(a.x, a.y, r*2.6, 0, TAU); }
-  ctx.fill();
-  // Menschen
-  ctx.fillStyle = COL.human; ctx.beginPath();
-  for (const a of hs){ ctx.moveTo(a.x + r, a.y); ctx.arc(a.x, a.y, r, 0, TAU); }
-  ctx.fill();
-  // Zombies
-  ctx.fillStyle = COL.zombie; ctx.beginPath();
-  for (const a of zs){ ctx.moveTo(a.x + r, a.y); ctx.arc(a.x, a.y, r, 0, TAU); }
-  ctx.fill();
+  // Türme
+  if (towers.length){
+    const ts = Math.max(TOWER_R*2, 11/s);
+    ctx.lineWidth = Math.max(0.4, 1.6/s);
+    for (const t of towers){
+      if (t.type === 'flame'){
+        ctx.fillStyle = COL.flameBase; ctx.strokeStyle = COL.flame;
+        ctx.beginPath(); ctx.rect(t.x - ts/2, t.y - ts/2, ts, ts); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#ffb27a'; ctx.lineWidth = ts*0.22;
+        ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(t.x + Math.cos(t.h)*ts*0.78, t.y + Math.sin(t.h)*ts*0.78); ctx.stroke();
+        ctx.lineWidth = Math.max(0.4, 1.6/s);
+      } else {
+        ctx.fillStyle = COL.teslaBase; ctx.strokeStyle = COL.tesla;
+        ctx.beginPath(); ctx.arc(t.x, t.y, ts*0.55, 0, TAU); ctx.fill(); ctx.stroke();
+        const charge = 1 - Math.max(0, t.cd)/TESLA_COOLDOWN;
+        const flash = Math.max(0, 1 - (now - t.flash)/250);
+        ctx.fillStyle = `rgba(160,236,255,${(0.25 + 0.6*charge + 0.15*flash).toFixed(2)})`;
+        ctx.beginPath(); ctx.arc(t.x, t.y, ts*(0.2 + 0.08*flash), 0, TAU); ctx.fill();
+      }
+    }
+  }
+
+  // Zombie-Schein, Brand
+  ctx.fillStyle = COL.zombieGlow; circles(zs, r*2.6); ctx.fill();
+  const burning = zs.filter(z => z.burn > 0);
+  if (burning.length){
+    ctx.fillStyle = `rgba(255,${100 + (rand()*60|0)},40,0.55)`; circles(burning, r*(1.7 + rand()*0.5)); ctx.fill();
+  }
+  // Menschen, Zombies
+  ctx.fillStyle = COL.human; circles(hs, r); ctx.fill();
+  ctx.fillStyle = COL.zombie; circles(zs, r); ctx.fill();
+  const stunned = zs.filter(z => z.stun > 0);
+  if (stunned.length){ ctx.strokeStyle = 'rgba(160,236,255,0.9)'; ctx.lineWidth = Math.max(0.3, 1.2/s); circles(stunned, r*1.5); ctx.stroke(); }
   // Soldaten
   if (ss.length){
     const sr = r*1.45;
     ctx.fillStyle = COL.soldier; ctx.strokeStyle = COL.soldierRing; ctx.lineWidth = Math.max(0.3, 1/s);
-    ctx.beginPath();
-    for (const a of ss){ ctx.moveTo(a.x + sr, a.y); ctx.arc(a.x, a.y, sr, 0, TAU); }
-    ctx.fill(); ctx.stroke();
+    circles(ss, sr); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = COL.soldier; ctx.lineWidth = Math.max(0.4, 1.4/s); ctx.beginPath();
     for (const a of ss){ ctx.moveTo(a.x + Math.cos(a.h)*sr, a.y + Math.sin(a.h)*sr); ctx.lineTo(a.x + Math.cos(a.h)*sr*2.2, a.y + Math.sin(a.h)*sr*2.2); }
     ctx.stroke();
   }
 
-  // Schüsse
+  // Leuchtende Effekte: Flammen, Blitze, Schüsse
+  ctx.globalCompositeOperation = 'lighter';
+  if (running){
+    for (const t of towers){
+      if (t.type !== 'flame' || !t.firing) continue;
+      const R = FLAME_RANGE*(0.86 + 0.14*rand());
+      const grd = ctx.createRadialGradient(t.x, t.y, 0.5, t.x, t.y, R);
+      grd.addColorStop(0, 'rgba(255,236,170,0.9)');
+      grd.addColorStop(0.35, 'rgba(255,150,45,0.55)');
+      grd.addColorStop(1, 'rgba(255,60,20,0)');
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.moveTo(t.x, t.y);
+      ctx.arc(t.x, t.y, R, t.h - FLAME_HALF*0.9, t.h + FLAME_HALF*0.9); ctx.closePath(); ctx.fill();
+    }
+  }
+  if (G.bolts.length){
+    G.bolts = G.bolts.filter(b => now - b.t < 220);
+    for (const b of G.bolts){
+      const a = 1 - (now - b.t)/220;
+      for (const [w, col] of [[Math.max(1.2, 5/s), `rgba(80,200,255,${(0.35*a).toFixed(2)})`], [Math.max(0.35, 1.4/s), `rgba(225,250,255,${a.toFixed(2)})`]]){
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath();
+        for (let k=1; k<b.pts.length; k++) boltPath(b.pts[k-1][0], b.pts[k-1][1], b.pts[k][0], b.pts[k][1], 2.5);
+        ctx.stroke();
+      }
+    }
+  }
   if (G.tracers.length){
     G.tracers = G.tracers.filter(t => now - t.t < 160);
     ctx.lineWidth = Math.max(0.25, 1.2/s);
@@ -1249,6 +1595,8 @@ function render(now){
       ctx.beginPath(); ctx.moveTo(t.x0, t.y0); ctx.lineTo(t.x1, t.y1); ctx.stroke();
     }
   }
+  ctx.globalCompositeOperation = 'source-over';
+
   // Ansteckungen
   if (G.fx.length){
     G.fx = G.fx.filter(e => now - e.t < (e.big ? 1600 : 700));
@@ -1263,7 +1611,7 @@ function render(now){
 }
 
 /* =====================================================================
-   10) KAMERA & EINGABE
+   11) KAMERA & EINGABE
    ===================================================================== */
 function fitCamera(){
   const avail = Math.min(VW - 20, VH - 250);
@@ -1274,8 +1622,7 @@ function fitCamera(){
 function clampCam(){
   if (!G) return;
   cam.s = Math.max(cam.fit*0.6, Math.min(14, cam.s));
-  const m = 60;
-  const w = G.size*cam.s;
+  const m = 60, w = G.size*cam.s;
   cam.x = Math.min(VW - m + w/2, Math.max(m - w/2, cam.x));
   cam.y = Math.min(VH - m + w/2, Math.max(m - w/2, cam.y));
 }
@@ -1295,7 +1642,7 @@ cv.addEventListener('pointerdown', e => {
     wallDraft = null;
     const [p1, p2] = [...pointers.values()];
     gesture = { mode:'pinch', d0: Math.hypot(p2.x-p1.x, p2.y-p1.y) || 1, s0: cam.s,
-      mx:(p1.x+p2.x)/2, my:(p1.y+p2.y)/2, wx:((p1.x+p2.x)/2 - cam.x)/cam.s, wy:((p1.y+p2.y)/2 - cam.y)/cam.s, moved:true };
+      wx:((p1.x+p2.x)/2 - cam.x)/cam.s, wy:((p1.y+p2.y)/2 - cam.y)/cam.s, moved:true };
   }
 });
 cv.addEventListener('pointermove', e => {
@@ -1358,6 +1705,7 @@ function tapAt(sx, sy){
   if (Math.abs(wx) > G.half || Math.abs(wy) > G.half) return;
   if (tool === 'outbreak') placeOutbreak(wx, wy);
   else if (tool === 'soldier') placeSoldier(wx, wy);
+  else if (tool === 'flame' || tool === 'tesla') placeTower(tool, wx, wy);
   else if (tool === 'erase') eraseAt(wx, wy);
 }
 
@@ -1372,19 +1720,30 @@ function simplify(pts){
 }
 
 /* =====================================================================
-   11) OBERFLÄCHE
+   12) OBERFLÄCHE
    ===================================================================== */
 const HINTS = {
   pan: 'Ziehen verschiebt die Karte, zwei Finger zoomen.',
   outbreak: 'Tippe auf die Karte: Dort bricht das Virus aus.',
   wall: 'Mit einem Finger eine Mauer ziehen. Zwei Finger verschieben die Karte.',
   soldier: 'Tippe, um einen Soldaten zu postieren. Reichweite 30 m.',
-  erase: 'Tippe auf eine Mauer oder einen Soldaten, um sie zu entfernen.'
+  flame: 'Tippe, um einen Flammenturm zu bauen. 16 m Kegel, schießt über Mauern.',
+  tesla: 'Tippe, um einen Teslaturm zu bauen. Blitz springt auf bis zu 5 Zombies.',
+  erase: 'Tippe auf eine Mauer, einen Soldaten oder Turm, um ihn zu entfernen.'
 };
+const BUILD_COLOR = { wall:'var(--wall)', soldier:'var(--soldier)', flame:'var(--flame)', tesla:'var(--tesla)' };
 let hintTimer = 0;
 function setTool(t){
+  if (t === 'build') t = lastBuild;
   tool = t;
-  document.querySelectorAll('.tool[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === t));
+  if (BUILD.has(t)) lastBuild = t;
+  document.querySelectorAll('.tool[data-tool]').forEach(b => {
+    const on = b.dataset.tool === 'build' ? BUILD.has(t) : b.dataset.tool === t;
+    b.classList.toggle('on', on);
+  });
+  $('#buildBtn').style.setProperty('--c', BUILD_COLOR[lastBuild]);
+  document.querySelectorAll('.chip[data-build]').forEach(b => b.classList.toggle('on', b.dataset.build === t));
+  $('#tray').hidden = !BUILD.has(t);
   $('#hint').textContent = HINTS[t];
   clearTimeout(hintTimer);
 }
@@ -1394,6 +1753,7 @@ function flashHint(msg){
   hintTimer = setTimeout(() => { $('#hint').textContent = HINTS[tool]; }, 3200);
 }
 document.querySelectorAll('.tool[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
+document.querySelectorAll('.chip[data-build]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.build)));
 
 function syncPlay(){
   const b = $('#playBtn');
@@ -1413,7 +1773,7 @@ $('#menuBtn').addEventListener('click', openMenu);
 document.addEventListener('keydown', e => {
   if (!G || $('#hud').hidden || e.target.tagName === 'INPUT') return;
   if (e.key === ' '){ e.preventDefault(); running = !running; syncPlay(); }
-  const map = { '1':'pan', '2':'outbreak', '3':'wall', '4':'soldier', '5':'erase' };
+  const map = { '1':'pan', '2':'outbreak', '3':'wall', '4':'soldier', '5':'flame', '6':'tesla', '7':'erase' };
   if (map[e.key]) setTool(map[e.key]);
   if (e.key === 'Escape'){ wallDraft = null; gesture = null; }
 });
@@ -1430,8 +1790,12 @@ function fmtDur(sec){
 
 function counts(){
   let h = 0, z = 0, s = 0;
-  for (const a of G.agents){ if (!a.alive) continue; if (a.t === H) h++; else if (a.t === Z) z++; else s++; }
-  return { h, z, s };
+  const groups = new Set();
+  for (const a of G.agents){
+    if (!a.alive) continue;
+    if (a.t === H){ h++; groups.add(a.g); } else if (a.t === Z) z++; else s++;
+  }
+  return { h, z, s, groups: groups.size };
 }
 
 let hudT = 0;
@@ -1482,11 +1846,14 @@ function showModal(title, cls, text, stats, buttons){
 function openMenu(){
   running = false; syncPlay();
   const c = counts();
+  const fl = G.towers.filter(t => t.type === 'flame').length, te = G.towers.length - fl;
   showModal('Pause', '', G.name, [
     ['Spielzeit', fmtClock(G.time)],
     ['Menschen', `${c.h} von ${G.humans0}`],
+    ['Gruppen', String(c.groups)],
     ['Zombies', String(c.z)],
     ['Erledigt', String(G.kills)],
+    ['Türme', `${fl} Flamme · ${te} Tesla`],
     ['Mauern', `${Math.round(G.walls.reduce((s, w) => s + w.len, 0))} m`]
   ], [
     { label:'Weiter', cls:'primary', fn:() => { running = true; syncPlay(); } },
@@ -1591,7 +1958,7 @@ $('#geoBtn').addEventListener('click', () => {
 $('#demoBtn').addEventListener('click', () => launch(async () => ({ f: demoFeatures(), size: 800, name: 'Demo-Stadt' })));
 
 /* =====================================================================
-   12) HAUPTSCHLEIFE
+   13) HAUPTSCHLEIFE
    ===================================================================== */
 let last = performance.now();
 function frame(now){
@@ -1599,8 +1966,7 @@ function frame(now){
   last = now;
   if (G && running && $('#start').hidden){
     const gdt = rdt * TIME_BASE * SPEEDS[speedIdx];
-    let zombiesExist = G.started;
-    if (zombiesExist){
+    if (G.started){
       G.fieldT -= gdt;
       if (G.fieldT <= 0){ updateFields(); G.fieldT = FIELD_INTERVAL; }
     }
@@ -1615,7 +1981,7 @@ function frame(now){
 requestAnimationFrame(frame);
 
 // Test-Zugang für die Konsole
-window.__ausbruch = { get G(){ return G; }, cam, placeOutbreak, placeSoldier, addWall, setTool, step, updateFields };
+window.__ausbruch = { get G(){ return G; }, cam, placeOutbreak, placeSoldier, placeTower, addWall, setTool, step, updateFields, counts };
 </script>
 </body>
 </html>
